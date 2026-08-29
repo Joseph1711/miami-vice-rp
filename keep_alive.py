@@ -1,13 +1,16 @@
-import asyncio
+import os
+import sys
 import json
 import logging
 import threading
 import time
-from flask import Flask, jsonify, request
+import subprocess
+from pathlib import Path
+from flask import Flask, jsonify, request, send_from_directory, render_template_string
 
-from bot.db import execute
+from bot.db import execute, check_connection, DB_PATH
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="dist", static_url_path="")
 _bot_ref = None
 _bot_loop = None
 _bot_task = None
@@ -17,6 +20,8 @@ _bot_configurator = None
 _bot_enabled = True
 _control_lock = None
 logger = logging.getLogger("dashboard")
+
+DIST_DIR = Path(__file__).resolve().parent / "dist"
 
 COMMAND_GROUPS = {
     "Economía": ["/balance", "/diario", "/semanal", "/trabajar", "/pagar", "/tabla", "/donar"],
@@ -107,7 +112,6 @@ def format_uptime(seconds):
 
 
 def _server_data():
-    """Read public server information for the dashboard without exposing player data."""
     departments = _safe_query(
         "SELECT id, name, acronym, description FROM departments ORDER BY name"
     )
@@ -191,125 +195,7 @@ def _bot_stats():
     }
 
 
-PAGE = """<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Miami Vice • Central</title>
-  <style>
-    :root { --bg:#09051c; --panel:#121027e8; --cyan:#00e5ff; --pink:#ff2d95; --gold:#ffd166; --muted:#b9b2d6; }
-    * { box-sizing:border-box; } body { margin:0; min-height:100vh; color:#f5f3ff; font-family:Inter,system-ui,sans-serif; background:radial-gradient(circle at 80% 5%,#ff2d9533,transparent 27%),linear-gradient(135deg,var(--bg),#17102f 60%,#2b0b35); }
-    .shell { width:min(1080px,100%); margin:auto; padding:36px 20px 56px; } .top { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; }
-    .eyebrow { color:var(--pink); font-size:.72rem; letter-spacing:.22em; font-weight:800; text-transform:uppercase; } h1 { color:var(--cyan); font-size:clamp(2.5rem,7vw,5rem); line-height:.9; margin:12px 0 15px; text-shadow:0 0 22px #00e5ff66; }
-    .intro { color:var(--muted); max-width:650px; line-height:1.6; font-size:1.05rem; margin:0; } .badge { color:var(--cyan); border:1px solid #00e5ff66; border-radius:99px; padding:10px 14px; font-size:.75rem; font-weight:800; white-space:nowrap; }
-     .stats { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin:30px 0 18px; } .card { background:var(--panel); border:1px solid #00e5ff2e; border-radius:18px; padding:20px; box-shadow:0 12px 40px #0003; }
-    .label { color:var(--muted); font-size:.68rem; letter-spacing:.14em; text-transform:uppercase; } .value { font-size:1.65rem; font-weight:850; margin-top:8px; }
-    .tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:15px; } button { color:var(--muted); background:#121027cc; border:1px solid #ffffff1c; border-radius:99px; cursor:pointer; padding:10px 14px; font:inherit; font-size:.82rem; } button.active,button:hover { color:var(--bg); background:var(--cyan); border-color:var(--cyan); }
-     .panel { display:none; } .panel.active { display:block; } .command-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; } .command-card { background:#12102799; border:1px solid #ff2d9533; border-radius:14px; padding:17px; }
-    .command-card h3 { color:var(--gold); font-size:.95rem; margin:0 0 11px; } .command { display:block; color:#f5f3ff; background:#09051c; border-radius:8px; margin:6px 0; padding:8px 10px; font: .78rem ui-monospace,monospace; }
-    .agency { margin-bottom:14px; } .agency-head { display:flex; align-items:center; justify-content:space-between; gap:12px; } .agency h3 { color:var(--cyan); margin:0; } .agency p { color:var(--muted); font-size:.86rem; margin:7px 0 14px; } .count { color:var(--pink); font-size:.78rem; font-weight:800; }
-    .cars { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; } .car { background:#09051c; border-radius:10px; padding:11px; font-size:.8rem; } .car small { display:block; color:var(--muted); margin-top:4px; }
-     .overview-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; } .metric { min-height:108px; } .metric .value { color:var(--cyan); } .live-note { color:var(--muted); font-size:.75rem; margin:0 0 16px; } .live-dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#42f59b; margin-right:6px; box-shadow:0 0 10px #42f59b; } .updated { color:#42f59b; }
-      .bot-control { margin:0 0 16px; } .control-head { display:flex; align-items:center; justify-content:space-between; gap:16px; } .control-head h2 { color:var(--cyan); font-size:1.15rem; margin:7px 0 0; } .control-actions { display:flex; gap:8px; flex-wrap:wrap; } .control-actions button { color:var(--bg); background:var(--cyan); border-color:var(--cyan); font-weight:800; } .control-actions button[data-action="stop"] { color:#f5f3ff; background:#ff2d9530; border-color:#ff2d9570; } .control-actions button:disabled { cursor:not-allowed; opacity:.45; } .bot-control p { color:var(--muted); font-size:.82rem; margin:13px 0 0; }
-      .command-tools { display:flex; gap:10px; margin:0 0 15px; } .command-tools input { flex:1; color:#f5f3ff; background:#121027cc; border:1px solid #ffffff1c; border-radius:12px; padding:11px 14px; font:inherit; outline:none; } .command-tools input:focus { border-color:var(--cyan); box-shadow:0 0 0 3px #00e5ff1c; } .copy { float:right; color:var(--cyan); background:transparent; border:0; padding:0; font-size:.7rem; cursor:pointer; } .copy:hover { color:var(--pink); background:transparent; border:0; }
-     .empty { color:var(--muted); text-align:center; padding:25px; } footer { color:#8983a8; text-align:center; font-size:.76rem; margin-top:34px; }
-     @media (max-width:900px) { .stats { grid-template-columns:repeat(3,1fr); } .command-grid,.overview-grid { grid-template-columns:repeat(2,1fr); } } @media (max-width:700px) { .top { display:block; } .badge { display:inline-block; margin-top:22px; } .stats,.command-grid,.overview-grid,.cars { grid-template-columns:1fr; } .shell { padding:28px 15px 44px; } }
-  </style>
-</head>
-<body>
-  <main class="shell">
-     <header class="top"><div><div class="eyebrow">South Florida Roleplay • Central</div><h1>🌴 Miami Vice</h1><p class="intro">La ciudad nunca duerme. Consulta los comandos, conoce las agencias y revisa la flota que mantiene vivo el 305.</p></div><div class="badge">MIAMI • 305</div></header>
-    <section class="stats">
-      <div class="card"><div class="label">Estado</div><div class="value" id="status">—</div></div>
-      <div class="card"><div class="label">Servidores</div><div class="value" id="guilds">—</div></div>
-      <div class="card"><div class="label">Tiempo activo</div><div class="value" id="uptime">—</div></div>
-       <div class="card"><div class="label">Ping</div><div class="value" id="ping">—</div></div>
-       <div class="card"><div class="label">Agencias</div><div class="value" id="agency-count">—</div></div>
-       <div class="card"><div class="label">Vehículos</div><div class="value" id="vehicle-count">—</div></div>
-     </section>
-     <section class="card bot-control">
-       <div class="control-head"><div><div class="label">Control del bot</div><h2 id="control-status">CARGANDO</h2></div><div class="control-actions"><button id="bot-start" data-action="start">Encender bot</button><button id="bot-stop" data-action="stop">Apagar bot</button></div></div>
-       <p id="control-message">Puedes controlar la conexión de Discord desde este panel.</p>
-     </section>
-      <p class="live-note"><span class="live-dot"></span>Datos en tiempo real · última actualización: <span id="updated" class="updated">—</span></p>
-     <nav class="tabs" aria-label="Secciones"><button class="active" data-tab="overview">Resumen</button><button data-tab="commands">Comandos</button><button data-tab="agencies">Agencias y flota</button></nav>
-     <section id="overview" class="panel active"><div class="overview-grid" id="overview-grid"></div></section>
-     <section id="commands" class="panel"><div class="command-tools"><input id="command-search" type="search" placeholder="Buscar un comando, por ejemplo: banco o propiedad" aria-label="Buscar comandos"></div><div id="command-grid" class="command-grid"></div></section>
-    <section id="agencies" class="panel"><div id="agency-list"></div></section>
-    <footer>Miami Vice RP • Neon nights on Ocean Drive</footer>
-  </main>
-  <script>
-     let snapshot = {data: __DATA__, stats: __STATS__};
-     const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-     function render(next) {
-       snapshot = next;
-       const {data, stats} = snapshot;
-       document.querySelector('#status').textContent = stats.status;
-       document.querySelector('#guilds').textContent = stats.guilds;
-       document.querySelector('#uptime').textContent = stats.uptime;
-       document.querySelector('#ping').textContent = stats.online ? `${stats.ping} ms` : '—';
-       document.querySelector('#agency-count').textContent = data.overview.agencies;
-       document.querySelector('#vehicle-count').textContent = data.overview.vehicles;
-       document.querySelector('#updated').textContent = new Date().toLocaleTimeString('es-CO');
-       document.querySelector('#control-status').textContent = stats.control_status || stats.status;
-       document.querySelector('#bot-start').disabled = !stats.control_enabled || stats.control_status === 'ENCENDIDO' || stats.control_status === 'CONECTANDO';
-       document.querySelector('#bot-stop').disabled = !stats.control_enabled || stats.control_status === 'APAGADO';
-       document.querySelector('#overview-grid').innerHTML = [
-         ['Vehículos activos', data.overview.active_vehicles, 'En servicio ahora'],
-         ['Mercado activo', data.overview.active_listings, 'Publicaciones disponibles'],
-         ['Propiedades libres', data.overview.available_properties, 'Disponibles para comprar'],
-         ['Tickets abiertos', data.overview.open_tickets, 'Solicitudes de soporte'],
-         ['Solicitudes pendientes', data.overview.pending_applications, 'Por revisar'],
-         ['Comandos disponibles', Object.values(data.commands).reduce((sum, group) => sum + group.length, 0), 'Guía completa del servidor'],
-       ].map(([label, value, hint]) => `<article class="card metric"><div class="label">${label}</div><div class="value">${value}</div><div class="label">${hint}</div></article>`).join('');
-       const search = document.querySelector('#command-search').value.toLowerCase().trim();
-       document.querySelector('#command-grid').innerHTML = Object.entries(data.commands).map(([group, commands]) => {
-         const visible = commands.filter(command => !search || `${group} ${command}`.toLowerCase().includes(search));
-         return visible.length ? `<article class="command-card"><h3>${esc(group)}</h3>${visible.map(command => `<span class="command">${esc(command)}<button class="copy" data-command="${esc(command)}" title="Copiar comando">Copiar</button></span>`).join('')}</article>` : '';
-       }).join('') || '<div class="card empty">No encontramos comandos con esa búsqueda.</div>';
-       const agencyList = document.querySelector('#agency-list');
-       agencyList.innerHTML = data.agencies.length ? data.agencies.map(agency => {
-         const cars = agency.fleet.length ? agency.fleet.map(car => `<div class="car">🚘 ${esc(car.vehicle)}<small>${esc(car.plate)} • ${esc(car.status)}</small></div>`).join('') : '<div class="empty">Sin vehículos registrados</div>';
-         return `<article class="card agency"><div class="agency-head"><h3>${esc(agency.acronym)} • ${esc(agency.name)}</h3><span class="count">${agency.fleet.length} vehículos</span></div><p>${esc(agency.description)}</p><div class="cars">${cars}</div></article>`;
-       }).join('') : '<div class="card empty">No hay agencias configuradas todavía.</div>';
-     }
-     render(snapshot);
-     document.querySelector('#command-search').addEventListener('input', () => render(snapshot));
-    document.addEventListener('click', async event => {
-      const control = event.target.closest('[data-action]');
-      if (control) {
-        control.disabled = true;
-        document.querySelector('#control-message').textContent = 'Enviando orden…';
-        try {
-          const response = await fetch('/bot/control', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action: control.dataset.action})});
-          const result = await response.json();
-          document.querySelector('#control-message').textContent = result.message;
-          await refresh();
-        } catch (error) {
-          document.querySelector('#control-message').textContent = 'No se pudo contactar al controlador.';
-        }
-        return;
-      }
-       const button = event.target.closest('[data-command]');
-       if (!button) return;
-       try { await navigator.clipboard.writeText(button.dataset.command); button.textContent = 'Copiado'; setTimeout(() => button.textContent = 'Copiar', 1200); }
-       catch (error) { button.textContent = 'Selecciona'; }
-     });
-     async function refresh() {
-       try { const response = await fetch('/status', {cache:'no-store'}); if (response.ok) render(await response.json()); }
-       catch (error) { document.querySelector('#updated').textContent = 'sin conexión'; }
-     }
-     setInterval(refresh, 5000);
-    document.querySelectorAll('[data-tab]').forEach(button => button.addEventListener('click', () => {
-      document.querySelectorAll('[data-tab], .panel').forEach(element => element.classList.remove('active'));
-      button.classList.add('active'); document.querySelector('#' + button.dataset.tab).classList.add('active');
-    }));
-  </script>
-</body>
-</html>"""
-
-
+# ================== HEALTH CHECK ================== #
 @app.route("/healthz")
 @app.route("/ping")
 @app.route("/health")
@@ -317,10 +203,130 @@ def health_check():
     return jsonify({"status": "ok", "service": "miami-vice-bot", "timestamp": time.time()}), 200
 
 
-@app.route("/")
-@app.route("/dashboard")
-def dashboard():
-    return PAGE.replace("__DATA__", json.dumps(_server_data(), ensure_ascii=False)).replace("__STATS__", json.dumps(_bot_stats(), ensure_ascii=False))
+# ================== API ENDPOINTS (FOR REACT SPA) ================== #
+@app.route("/api/bot/status")
+def api_bot_status():
+    bot = _bot_ref
+    ready = bool(bot and bot.is_ready())
+    start_time = getattr(bot, "start_time", None)
+    uptime_seconds = int(time.time() - start_time) if (ready and start_time) else 0
+    token = os.environ.get("DISCORD_TOKEN", "")
+    has_token = bool(token and len(token) > 10)
+    token_masked = f"{token[:6]}...{token[-4:]}" if has_token else "No configurado"
+    
+    db_conn = check_connection()
+    cogs_list = [
+        "bot.cogs.economy",
+        "bot.cogs.bank",
+        "bot.cogs.crimen",
+        "bot.cogs.inventory",
+        "bot.cogs.marketplace",
+        "bot.cogs.departments",
+        "bot.cogs.companies",
+        "bot.cogs.properties",
+        "bot.cogs.social",
+        "bot.cogs.tickets",
+        "bot.cogs.verification",
+        "bot.cogs.admin",
+        "bot.cogs.help",
+    ]
+    return jsonify({
+        "status": "online" if ready else "idle",
+        "pid": os.getpid(),
+        "uptimeSeconds": uptime_seconds,
+        "hasToken": has_token,
+        "tokenMasked": token_masked,
+        "dbExists": db_conn.get("ok", False),
+        "dbBackend": "Supabase Postgres" if os.environ.get("SUPABASE_DB_URL") else f"SQLite Local ({DB_PATH.name})",
+        "cogsCount": len(cogs_list),
+        "cogsList": cogs_list,
+    })
+
+
+@app.route("/api/bot/start", methods=["POST"])
+def api_bot_start():
+    result = _control_bot("start")
+    return jsonify({"success": result.get("ok", False), "message": result.get("message", "")})
+
+
+@app.route("/api/bot/stop", methods=["POST"])
+def api_bot_stop():
+    result = _control_bot("stop")
+    return jsonify({"success": result.get("ok", False), "message": result.get("message", "")})
+
+
+@app.route("/api/bot/restart", methods=["POST"])
+def api_bot_restart():
+    _control_bot("stop")
+    time.sleep(1)
+    result = _control_bot("start")
+    return jsonify({"success": True, "message": "Bot reiniciado."})
+
+
+@app.route("/api/bot/logs")
+def api_bot_logs():
+    bot = _bot_ref
+    ready = bool(bot and bot.is_ready())
+    timestamp_str = time.strftime("%H:%M:%S")
+    
+    demo_logs = [
+        {"id": 1, "time": timestamp_str, "stream": "system", "text": "Miami Vice RP Bot Manager & Control Hub inicializado."},
+        {"id": 2, "time": timestamp_str, "stream": "system", "text": f"Estado del bot Discord: {'EN LÍNEA ✅' if ready else 'EN ESPERA ⏳'}"},
+        {"id": 3, "time": timestamp_str, "stream": "stdout", "text": f"Base de datos activa: {check_connection().get('masked_url', 'Desconocido')}"},
+    ]
+    if ready:
+        demo_logs.append({"id": 4, "time": timestamp_str, "stream": "stdout", "text": f"[BOT] Conectado con latencia: {round(bot.latency * 1000)}ms en {len(bot.guilds)} servidores."})
+    
+    return jsonify({"logs": demo_logs, "lastId": len(demo_logs)})
+
+
+@app.route("/api/bot/logs/clear", methods=["POST"])
+def api_bot_logs_clear():
+    return jsonify({"success": True})
+
+
+@app.route("/api/database/stats")
+def api_database_stats():
+    tables_list = [
+        "users", "guild_config", "departments", "department_members", 
+        "fleet_vehicles", "fleet_vehicle_types", "properties", "companies", 
+        "bank_accounts", "inventory", "marketplace_listings", "tickets", 
+        "crimes", "transactions", "daily_rewards", "drug_plants"
+    ]
+    table_stats = []
+    total_rows = 0
+    for t in tables_list:
+        try:
+            cnt = _safe_count(t)
+            table_stats.append({"name": t, "count": cnt})
+            total_rows += cnt
+        except Exception:
+            pass
+
+    user_count = _safe_count("users")
+    total_cash_rows = _safe_query("SELECT COALESCE(SUM(cash), 0) AS total_cash, COALESCE(SUM(bank), 0) AS total_bank FROM users")
+    total_cash = int(total_cash_rows[0]["total_cash"]) if total_cash_rows else 0
+    total_bank = int(total_cash_rows[0]["total_bank"]) if total_cash_rows else 0
+
+    return jsonify({
+        "tables": table_stats,
+        "totalTables": len(tables_list),
+        "totalRows": total_rows,
+        "userCount": user_count,
+        "totalEconomy": total_cash + total_bank,
+        "totalCash": total_cash,
+        "totalBank": total_bank,
+    })
+
+
+@app.route("/api/database/table-data")
+def api_database_table_data():
+    table_name = request.args.get("table", "users")
+    limit = min(int(request.args.get("limit", 50)), 100)
+    if not table_name.replace("_", "").isalnum():
+        return jsonify({"error": "Nombre de tabla inválido"}), 400
+    rows = _safe_query(f"SELECT * FROM {table_name} LIMIT {limit}")
+    return jsonify({"rows": rows, "count": len(rows)})
 
 
 @app.route("/status")
@@ -338,14 +344,33 @@ def bot_control():
     return jsonify(result), 200 if result["ok"] else 503
 
 
+# ================== FRONTEND SERVING (REACT SPA) ================== #
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    # Si existe el archivo estático en dist/ (ej. assets/index.js, css, etc.)
+    if path and (DIST_DIR / path).exists():
+        return send_from_directory(str(DIST_DIR), path)
+
+    # Si dist/index.html existe, servir la aplicación React moderna
+    index_file = DIST_DIR / "index.html"
+    if index_file.exists():
+        return send_from_directory(str(DIST_DIR), "index.html")
+
+    # Fallback si no está compilado
+    return jsonify({
+        "service": "Miami Vice RP Bot Hub",
+        "status": "online",
+        "api": "/api/bot/status",
+        "health": "/healthz"
+    })
+
+
 def keep_alive():
-    import os
-    # Si explícitamente se desactiva Flask
     if os.environ.get("DISABLE_FLASK") == "1":
         logger.info("[KEEP_ALIVE] Servidor Flask desactivado por configuración.")
         return
 
-    # Obtener el puerto asignado por Render o entorno (por defecto 10000 en Render Web Services o 3000)
     is_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
     default_port = 10000 if is_render else 3000
     try:
@@ -353,14 +378,12 @@ def keep_alive():
     except (ValueError, TypeError):
         port = default_port
 
-    # En entorno local AI Studio con Node en puerto 3000, evitar colisión si DISABLE_FLASK_PORT_3000 está activo y port es 3000
     if not is_render and os.environ.get("DISABLE_FLASK_PORT_3000") == "1" and port == 3000:
         logger.info("[KEEP_ALIVE] Servidor web principal gestionado por Express en puerto 3000.")
         return
 
     def _run_server():
         try:
-            # Desactivar logs ruidosos de werkzeug en producción
             werkzeug_logger = logging.getLogger("werkzeug")
             werkzeug_logger.setLevel(logging.WARNING)
             app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
@@ -370,6 +393,6 @@ def keep_alive():
     try:
         thread = threading.Thread(target=_run_server, daemon=True)
         thread.start()
-        logger.info(f"[KEEP_ALIVE] Servidor web activo en 0.0.0.0:{port} (Listo para Render & Healthchecks) ✅")
+        logger.info(f"[KEEP_ALIVE] Panel Web & Bot Manager activo en 0.0.0.0:{port} ✅")
     except Exception as e:
         logger.warning(f"[KEEP_ALIVE] No se pudo iniciar hilo del servidor web: {e}")
