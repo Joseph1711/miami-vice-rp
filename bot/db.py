@@ -22,11 +22,50 @@ except ImportError:
 
 _DOLLAR_RE = re.compile(r"\$(\d+)")
 _ROOT = Path(__file__).resolve().parent.parent
-RENDER_DATA_DIR = Path(os.environ.get("RENDER_DISK_PATH", "/var/data"))
-_IS_RENDER = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
-_DEFAULT_DB_PATH = RENDER_DATA_DIR / "miami_vice.sqlite3" if _IS_RENDER else _ROOT / "miami_vice.sqlite3"
-DB_PATH = Path(os.environ.get("BOT_DB_PATH", str(_DEFAULT_DB_PATH))).expanduser()
+
+def _get_usable_sqlite_path() -> Path:
+    """Find a writable path for SQLite database."""
+    # 1. Explicit BOT_DB_PATH env var
+    custom_path = os.environ.get("BOT_DB_PATH")
+    if custom_path:
+        p = Path(custom_path).expanduser()
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception as e:
+            logger.warning(f"[DB] BOT_DB_PATH '{custom_path}' no es escribible: {e}")
+
+    # 2. Render persistent disk if explicitly configured
+    render_disk = os.environ.get("RENDER_DISK_PATH")
+    if render_disk:
+        try:
+            p = Path(render_disk).expanduser()
+            p.mkdir(parents=True, exist_ok=True)
+            test_file = p / ".perm_check"
+            test_file.touch()
+            test_file.unlink()
+            return p / "miami_vice.sqlite3"
+        except Exception as e:
+            logger.warning(f"[DB] RENDER_DISK_PATH '{render_disk}' no es accesible: {e}")
+
+    # 3. Project root directory
+    try:
+        _ROOT.mkdir(parents=True, exist_ok=True)
+        test_file = _ROOT / ".perm_check"
+        test_file.touch()
+        test_file.unlink()
+        return _ROOT / "miami_vice.sqlite3"
+    except Exception as e:
+        logger.warning(f"[DB] Directorio raíz no es escribible: {e}")
+
+    # 4. Universal /tmp fallback
+    tmp_path = Path("/tmp/miami_vice.sqlite3")
+    tmp_path.parent.mkdir(parents=True, exist_ok=True)
+    return tmp_path
+
+DB_PATH = _get_usable_sqlite_path()
 DATABASE_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+_IS_RENDER = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
 
 # En Render, FUERZA el uso de PostgreSQL si está disponible
 _requested_backend = os.environ.get("DB_BACKEND", "").strip().lower()
