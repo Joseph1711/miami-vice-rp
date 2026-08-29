@@ -519,12 +519,12 @@ def _ensure_profile_note():
     from bot.db import USE_POSTGRES, execute
     try:
         if USE_POSTGRES:
-            execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joseph'")
+            execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
         else:
             columns = execute("PRAGMA table_info(users)", fetch="all") or []
             if not any(column.get("name") == "profile_note" for column in columns):
-                execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joseph'")
-        execute("UPDATE users SET profile_note=COALESCE(profile_note, 'Made By Joseph') WHERE profile_note IS NULL")
+                execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joshi'")
+        execute("UPDATE users SET profile_note='Made By Joshi' WHERE profile_note IS NULL OR profile_note='Made By Joseph'")
     except Exception as e:
         logger.warning(f"Error al agregar profile_note: {e}")
 

@@ -7,13 +7,15 @@ CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     discord_id TEXT NOT NULL,
     guild_id TEXT NOT NULL,
+    username TEXT,
+    display_name TEXT,
     cash NUMERIC DEFAULT 500,
     bank NUMERIC DEFAULT 0,
     xp INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
     reputation INTEGER DEFAULT 0,
     dirty_money NUMERIC DEFAULT 0,
-    profile_note TEXT DEFAULT 'Made By Joseph',
+    profile_note TEXT DEFAULT 'Made By Joshi',
     is_verified BOOLEAN DEFAULT FALSE,
     last_daily TIMESTAMP,
     last_weekly TIMESTAMP,
@@ -472,5 +474,5 @@ CREATE TABLE IF NOT EXISTS criminal_missions (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joseph';
-UPDATE users SET profile_note = COALESCE(profile_note, 'Made By Joseph') WHERE profile_note IS NULL;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi';
+UPDATE users SET profile_note = 'Made By Joshi' WHERE profile_note IS NULL OR profile_note = 'Made By Joseph';

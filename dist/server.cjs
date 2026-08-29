@@ -326,24 +326,43 @@ import sqlite3, uuid, datetime
 conn = sqlite3.connect('miami_vice.sqlite3')
 cur = conn.cursor()
 now = datetime.datetime.utcnow().isoformat()
+
+# Seed demo users with real usernames
 demo_users = [
-    (str(uuid.uuid4()), "123456789012345678", "999999999999999999", 15000, 45000, 240, 3, 50, 2000, True, now, now),
-    (str(uuid.uuid4()), "234567890123456789", "999999999999999999", 5000, 12000, 110, 2, 20, 0, True, now, now),
-    (str(uuid.uuid4()), "345678901234567890", "999999999999999999", 80000, 250000, 1500, 8, 120, 15000, True, now, now)
+    (str(uuid.uuid4()), "123456789012345678", "999999999999999999", "Joshi_Admin", "Joshi | Fundador", 150000, 450000, 2400, 10, 500, 2000, True, now, now),
+    (str(uuid.uuid4()), "234567890123456789", "999999999999999999", "Carlos_M", "Carlos Santana", 25000, 85000, 650, 4, 120, 500, True, now, now),
+    (str(uuid.uuid4()), "345678901234567890", "999999999999999999", "Elena_Miami", "Elena R.", 80000, 250000, 1500, 8, 300, 15000, True, now, now)
 ]
 for u in demo_users:
     cur.execute("""
-    INSERT OR REPLACE INTO users (id, discord_id, guild_id, cash, bank, xp, level, reputation, dirty_money, is_verified, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO users (id, discord_id, guild_id, username, display_name, cash, bank, xp, level, reputation, dirty_money, is_verified, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, u)
+
+# Seed default departments if none exist
+cur.execute("SELECT COUNT(*) FROM departments")
+dept_count = cur.fetchone()[0]
+if dept_count == 0:
+    depts = [
+        (str(uuid.uuid4()), "999999999999999999", "Departamento de Polic\xEDa de Miami", "CPD", "Seguridad y orden p\xFAblico", 500000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Cuerpo de Bomberos & Rescate", "CFD", "Atenci\xF3n a emergencias y rescates", 350000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Servicios M\xE9dicos de Emergencia", "EMS", "Atenci\xF3n m\xE9dica y hospitalaria", 300000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Departamento de Justicia", "DOJ", "Leyes, juicios y sentencias", 250000, None, None, now, now)
+    ]
+    for d in depts:
+        cur.execute("""
+        INSERT INTO departments (id, guild_id, name, acronym, description, budget, leader_id, role_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, d)
+
 conn.commit()
 conn.close()
 print("OK")
 `;
   const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
   child.on("close", () => {
-    appendLog("system", "Datos de prueba insertados en SQLite miami_vice.sqlite3.");
-    res.json({ success: true, message: "Datos demo cargados." });
+    appendLog("system", "Datos de prueba insertados en SQLite miami_vice.sqlite3 (usuarios con usernames y departamentos).");
+    res.json({ success: true, message: "Datos demo con usuarios y departamentos cargados." });
   });
 });
 async function startServer() {

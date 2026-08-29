@@ -86,6 +86,39 @@ DB_STATEMENT_TIMEOUT_MS = int(DB_OPERATION_TIMEOUT_SECONDS * 1000)
 logger.info(f"[DB] Backend seleccionado: {DB_BACKEND} | USE_POSTGRES: {USE_POSTGRES} | DATABASE_URL: {'✅' if DATABASE_URL else '❌'}")
 
 
+def _prepare_query_and_params(query: str, params=None, is_sqlite: bool = True):
+    """
+    Translates Postgres-style numbered parameters ($1, $2, $1, etc.) into driver-compatible format.
+    Handles duplicate placeholders safely by duplicating bindings in positional order.
+    """
+    if not params:
+        raw = _DOLLAR_RE.sub("?" if is_sqlite else "%s", query)
+        if is_sqlite:
+            raw = raw.replace("NOW()", "CURRENT_TIMESTAMP").replace("GREATEST(", "MAX(").replace("ILIKE", "LIKE")
+        return raw, ()
+
+    matches = _DOLLAR_RE.findall(query)
+    if not matches:
+        raw = query
+        if is_sqlite:
+            raw = raw.replace("NOW()", "CURRENT_TIMESTAMP").replace("GREATEST(", "MAX(").replace("ILIKE", "LIKE")
+        return raw, params
+
+    p_seq = list(params) if isinstance(params, (list, tuple)) else [params]
+    new_params = []
+    for m in matches:
+        idx = int(m) - 1
+        if 0 <= idx < len(p_seq):
+            new_params.append(p_seq[idx])
+        else:
+            raise IndexError(f"Query placeholder ${m} out of range for params of length {len(p_seq)}")
+
+    raw = _DOLLAR_RE.sub("?" if is_sqlite else "%s", query)
+    if is_sqlite:
+        raw = raw.replace("NOW()", "CURRENT_TIMESTAMP").replace("GREATEST(", "MAX(").replace("ILIKE", "LIKE")
+    return raw, tuple(new_params)
+
+
 def _to_sqlite(query: str) -> str:
     return (
         _DOLLAR_RE.sub("?", query)
@@ -111,13 +144,55 @@ def connection_label() -> str:
     return f"SQLite local — {DB_PATH}"
 
 
+def _ensure_schema_migrations(conn):
+    """Adds missing columns like username, display_name if they do not exist yet."""
+    try:
+        if USE_POSTGRES:
+            with conn.cursor() as cursor:
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT")
+                cursor.execute("ALTER TABLE department_members ADD COLUMN IF NOT EXISTS username TEXT")
+                cursor.execute("ALTER TABLE company_members ADD COLUMN IF NOT EXISTS username TEXT")
+            conn.commit()
+        else:
+            cursor = conn.execute("PRAGMA table_info(users)")
+            existing_cols = {row[1] for row in cursor.fetchall()}
+            if "username" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
+            if "display_name" not in existing_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+            
+            # department_members check
+            cursor_dm = conn.execute("PRAGMA table_info(department_members)")
+            existing_dm = {row[1] for row in cursor_dm.fetchall()}
+            if "username" not in existing_dm and len(existing_dm) > 0:
+                conn.execute("ALTER TABLE department_members ADD COLUMN username TEXT")
+                
+            # company_members check
+            cursor_cm = conn.execute("PRAGMA table_info(company_members)")
+            existing_cm = {row[1] for row in cursor_cm.fetchall()}
+            if "username" not in existing_cm and len(existing_cm) > 0:
+                conn.execute("ALTER TABLE company_members ADD COLUMN username TEXT")
+            conn.commit()
+    except Exception as e:
+        logger.debug(f"[DB] Migration check notice: {e}")
+
+
 def _connect_sqlite() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=DB_OPERATION_TIMEOUT_SECONDS, check_same_thread=False, detect_types=sqlite3.PARSE_DECLTYPES)
+    conn = sqlite3.connect(
+        DB_PATH, 
+        timeout=DB_OPERATION_TIMEOUT_SECONDS, 
+        check_same_thread=False, 
+        detect_types=sqlite3.PARSE_DECLTYPES,
+        isolation_level=None # autocommit mode with explicit transaction control
+    )
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute(f"PRAGMA busy_timeout = {DB_STATEMENT_TIMEOUT_MS}")
+    _ensure_schema_migrations(conn)
     return conn
 
 
@@ -126,12 +201,14 @@ def _connect_postgres():
         raise RuntimeError("Falta psycopg[binary]. Instala las dependencias del proyecto.")
     if not DATABASE_URL:
         raise RuntimeError("SUPABASE_DB_URL no está configurada.")
-    return psycopg.connect(
+    conn = psycopg.connect(
         DATABASE_URL,
         connect_timeout=10,
         options=f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS} -c lock_timeout={min(DB_STATEMENT_TIMEOUT_MS, 3000)}",
         row_factory=dict_row,
     )
+    _ensure_schema_migrations(conn)
+    return conn
 
 
 def _connect():
@@ -168,26 +245,28 @@ def _fetch_result(cursor, fetch):
 
 def execute(query, params=None, fetch=None):
     conn = _connect()
-    raw = _to_postgres(query) if USE_POSTGRES else _to_sqlite(query)
+    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=not USE_POSTGRES)
     started = time.monotonic()
     try:
         if USE_POSTGRES:
             with conn.cursor() as cursor:
-                cursor.execute(raw, params or ())
+                cursor.execute(raw, safe_params or ())
                 result = _fetch_result(cursor, fetch)
             conn.commit()
         else:
-            with conn:
-                cursor = conn.execute(raw, params or ())
-                result = _fetch_result(cursor, fetch)
+            cursor = conn.execute(raw, safe_params or ())
+            result = _fetch_result(cursor, fetch)
         elapsed_ms = (time.monotonic() - started) * 1000
         if elapsed_ms > SLOW_QUERY_MS:
             logger.warning("[DB][SLOW %.0fms] %s", elapsed_ms, raw[:120])
         return result
     except Exception as error:
         if USE_POSTGRES:
-            conn.rollback()
-        logger.error("[DB] Error en query: %s | Query: %s", error, raw[:200])
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        logger.error("[DB] Error en query: %s | Query: %s | Params: %s", error, raw[:200], safe_params)
         raise
     finally:
         conn.close()
@@ -200,18 +279,22 @@ def execute_many(queries):
         if USE_POSTGRES:
             with conn.cursor() as cursor:
                 for query, params in queries:
-                    cursor.execute(_to_postgres(query), params or ())
+                    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=False)
+                    cursor.execute(raw, safe_params or ())
             conn.commit()
         else:
-            with conn:
-                for query, params in queries:
-                    conn.execute(_to_sqlite(query), params or ())
+            for query, params in queries:
+                raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=True)
+                conn.execute(raw, safe_params or ())
         elapsed_ms = (time.monotonic() - started) * 1000
         if elapsed_ms > SLOW_QUERY_MS:
             logger.warning("[DB][SLOW BATCH %.0fms] %s queries", elapsed_ms, len(queries))
     except Exception as error:
         if USE_POSTGRES:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         logger.error("[DB] Error en execute_many: %s", error)
         raise
     finally:

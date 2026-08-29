@@ -242,19 +242,26 @@ export function DatabaseExplorer() {
                 <tbody className="divide-y divide-slate-800/60">
                   {filteredRows.map((row, idx) => (
                     <tr key={idx} className="hover:bg-slate-900/40 transition-colors">
-                      {columns.map(c => (
-                        <td key={c} className="p-2.5 text-slate-300 max-w-xs truncate whitespace-nowrap">
-                          {row[c] === null ? (
-                            <span className="text-slate-600 italic">null</span>
-                          ) : typeof row[c] === 'boolean' ? (
-                            <span className={row[c] ? 'text-emerald-400' : 'text-rose-400'}>
-                              {row[c] ? 'true' : 'false'}
-                            </span>
-                          ) : (
-                            String(row[c])
-                          )}
-                        </td>
-                      ))}
+                      {columns.map(c => {
+                        const isUserNameCol = c === 'username' || c === 'display_name';
+                        return (
+                          <td key={c} className={`p-2.5 max-w-xs truncate whitespace-nowrap ${isUserNameCol ? 'text-cyan-300 font-semibold' : 'text-slate-300'}`}>
+                            {row[c] === null ? (
+                              <span className="text-slate-600 italic">null</span>
+                            ) : typeof row[c] === 'boolean' ? (
+                              <span className={row[c] ? 'text-emerald-400' : 'text-rose-400'}>
+                                {row[c] ? 'true' : 'false'}
+                              </span>
+                            ) : isUserNameCol && row[c] ? (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-950/80 border border-cyan-800/60 text-cyan-300">
+                                <span>@{String(row[c])}</span>
+                              </span>
+                            ) : (
+                              String(row[c])
+                            )}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>

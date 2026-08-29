@@ -1,5 +1,6 @@
 import discord
 from discord import app_commands
+from discord.ext import tasks
 import logging
 import datetime
 import random
@@ -11,24 +12,86 @@ from bot.config import XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX
 
 logger = logging.getLogger("bot")
 
+STATUS_ACTIVITIES = [
+    (discord.ActivityType.watching, "la ciudad de Miami 🌴"),
+    (discord.ActivityType.watching, "las calles de Miami Beach 🏖️"),
+    (discord.ActivityType.playing, "de Policía en ER:LC 🚓"),
+    (discord.ActivityType.watching, "el tráfico en Ocean Drive 🚔"),
+    (discord.ActivityType.watching, "las cámaras de seguridad de Miami 📹"),
+    (discord.ActivityType.playing, "patrullando con el CPD 🚨"),
+    (discord.ActivityType.watching, "los reportes del 911 🚨"),
+    (discord.ActivityType.listening, "la radio policial de Miami 📻"),
+    (discord.ActivityType.watching, "a los ciudadanos de Miami Vice RP 👥"),
+    (discord.ActivityType.playing, "ER:LC Miami Vice Roleplay 🎮"),
+    (discord.ActivityType.watching, "operaciones del CFD & EMS 🚒🚑"),
+    (discord.ActivityType.watching, "las subastas del Mercado Negro 💼"),
+    (discord.ActivityType.watching, "el atardecer en South Beach 🌅"),
+    (discord.ActivityType.watching, "casos del Departamento de Justicia ⚖️"),
+    (discord.ActivityType.playing, "Made By Joshi | /help ✨"),
+]
+
 def setup_events(bot):
+    @tasks.loop(seconds=20)
+    async def rotate_presence():
+        if not bot.is_ready():
+            return
+        idx = getattr(rotate_presence, "current_index", 0)
+        act_type, act_name = STATUS_ACTIVITIES[idx % len(STATUS_ACTIVITIES)]
+        rotate_presence.current_index = idx + 1
+        try:
+            activity = discord.Activity(type=act_type, name=act_name)
+            await bot.change_presence(
+                status=discord.Status.online,
+                activity=activity
+            )
+        except Exception as e:
+            logger.debug(f"Error rotando estado: {e}")
+
     @bot.event
     async def on_ready():
         bot.start_time = datetime.datetime.utcnow().timestamp()
         logger.info(f"Bot en línea: {bot.user} ({bot.user.id})")
         logger.info(f"Servidores: {len(bot.guilds)}")
         
-        await bot.change_presence(
-            status=discord.Status.online,
-            activity=discord.Game(name="Made by Joshi"),
-        )
-        logger.info("🎭 Estado permanente configurado: Made by Joshi")
+        # Iniciar rotación de presencia dinámica (Viendo / Jugando / Escuchando)
+        if not rotate_presence.is_running():
+            rotate_presence.start()
+        logger.info("🎭 Rotación dinámica de actividades iniciada (Made By Joshi)")
 
         try:
             synced = await bot.tree.sync()
             logger.info(f"Sincronizados {len(synced)} comandos slash")
         except Exception as e:
             logger.error(f"Error sincronizando comandos: {e}")
+
+        # Sincronización en segundo plano de nombres de usuarios para servidores conocidos
+        try:
+            from bot.helpers import async_update_user_name
+            for guild in bot.guilds:
+                for member in guild.members:
+                    if not member.bot:
+                        await async_update_user_name(
+                            str(member.id), 
+                            str(guild.id), 
+                            username=member.name, 
+                            display_name=member.display_name
+                        )
+        except Exception as e:
+            logger.debug(f"User sync notice: {e}")
+
+    @bot.event
+    async def on_interaction(interaction: discord.Interaction):
+        # Auto-registro y actualización de username en cualquier interacción
+        if interaction.user and interaction.guild and not interaction.user.bot:
+            try:
+                await async_get_or_create_user(
+                    str(interaction.user.id),
+                    str(interaction.guild.id),
+                    username=interaction.user.name,
+                    display_name=interaction.user.display_name
+                )
+            except Exception as e:
+                logger.debug(f"Auto-update user on interaction: {e}")
 
     @bot.event
     async def on_message(message):
@@ -41,7 +104,12 @@ def setup_events(bot):
         
         xp_amount = random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
         try:
-            await async_get_or_create_user(str(message.author.id), str(message.guild.id))
+            await async_get_or_create_user(
+                str(message.author.id), 
+                str(message.guild.id),
+                username=message.author.name,
+                display_name=message.author.display_name
+            )
             await add_xp(str(message.author.id), str(message.guild.id), xp_amount, bot)
         except Exception as e:
             logger.error(f"XP error on message: {e}")

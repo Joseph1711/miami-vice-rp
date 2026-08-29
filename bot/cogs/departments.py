@@ -97,11 +97,11 @@ class Departments(commands.Cog):
         if existing:
             await interaction.followup.send(embed=error_embed("Ya eres miembro", f"Ya perteneces a **{dept['name']}**"), ephemeral=True)
             return
-        await async_get_or_create_user(str(interaction.user.id), str(interaction.guild_id))
+        await async_get_or_create_user(str(interaction.user.id), str(interaction.guild_id), username=interaction.user.name, display_name=interaction.user.display_name)
         await aexecute(
-            """INSERT INTO department_members (id, department_id, discord_id, guild_id, rank, salary, joined_at)
-               VALUES ($1,$2,$3,$4,'Cadete',0,NOW())""",
-            (generate_id(), dept["id"], str(interaction.user.id), str(interaction.guild_id))
+            """INSERT INTO department_members (id, department_id, discord_id, guild_id, rank, salary, joined_at, username)
+               VALUES ($1,$2,$3,$4,'Cadete',0,NOW(),$5)""",
+            (generate_id(), dept["id"], str(interaction.user.id), str(interaction.guild_id), interaction.user.name)
         )
         emoji = DEPT_EMOJI.get(dept.get("acronym",""),"🏢")
         await interaction.followup.send(embed=success_embed(f"Bienvenido al {emoji} {dept['name']}", f"Te uniste como **Cadete**"))
@@ -119,14 +119,14 @@ class Departments(commands.Cog):
             return
         existing = await aexecute("SELECT id FROM department_members WHERE department_id=$1 AND discord_id=$2", (dept["id"], str(usuario.id)), fetch="one")
         if existing:
-            await aexecute("UPDATE department_members SET rank=$1, salary=$2 WHERE id=$3", (rango, salario, existing["id"]))
+            await aexecute("UPDATE department_members SET rank=$1, salary=$2, username=$3 WHERE id=$4", (rango, salario, usuario.name, existing["id"]))
         else:
             await aexecute(
-                """INSERT INTO department_members (id, department_id, discord_id, guild_id, rank, salary, joined_at)
-                   VALUES ($1,$2,$3,$4,$5,$6,NOW())""",
-                (generate_id(), dept["id"], str(usuario.id), str(interaction.guild_id), rango, salario)
+                """INSERT INTO department_members (id, department_id, discord_id, guild_id, rank, salary, joined_at, username)
+                   VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7)""",
+                (generate_id(), dept["id"], str(usuario.id), str(interaction.guild_id), rango, salario, usuario.name)
             )
-        await async_get_or_create_user(str(usuario.id), str(interaction.guild_id))
+        await async_get_or_create_user(str(usuario.id), str(interaction.guild_id), username=usuario.name, display_name=usuario.display_name)
         if dept.get("role_id"):
             role = interaction.guild.get_role(int(dept["role_id"]))
             if role:
@@ -194,7 +194,11 @@ class Departments(commands.Cog):
             await interaction.followup.send(embed=error_embed("No encontrado", f"Departamento **{acronimo}** no existe"), ephemeral=True)
             return
         members = await aexecute(
-            "SELECT * FROM department_members WHERE department_id=$1 ORDER BY joined_at",
+            """SELECT dm.*, u.username as user_name, u.display_name as user_display_name
+               FROM department_members dm
+               LEFT JOIN users u ON u.discord_id = dm.discord_id AND u.guild_id = dm.guild_id
+               WHERE dm.department_id=$1 
+               ORDER BY dm.joined_at""",
             (dept["id"],), fetch="all"
         ) or []
         emoji = DEPT_EMOJI.get(dept.get("acronym",""),"🏢")
@@ -202,7 +206,12 @@ class Departments(commands.Cog):
         if not members:
             e.description = "No hay miembros en este departamento"
         else:
-            lines = [f"<@{m['discord_id']}> — **{m.get('rank','Oficial')}** | {format_currency(m.get('salary',0))}/día" for m in members]
+            lines = []
+            for m in members:
+                uname = m.get("username") or m.get("user_name")
+                dname = m.get("user_display_name")
+                tag = f"**{uname}** (@{dname})" if uname and dname and uname != dname else f"**{uname or 'Usuario'}**"
+                lines.append(f"{tag} — `<@{m['discord_id']}>` | **{m.get('rank','Oficial')}** | {format_currency(m.get('salary',0))}/día")
             e.description = "\n".join(lines)
         await interaction.followup.send(embed=e)
 

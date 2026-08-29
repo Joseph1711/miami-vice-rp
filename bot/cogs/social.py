@@ -93,7 +93,7 @@ class Social(commands.Cog):
         e.set_thumbnail(url=target.display_avatar.url)
         e.add_field(name="Puntos", value=str(rep), inline=True)
         e.add_field(name="Rango", value=rank, inline=True)
-        e.add_field(name="Nota", value=user.get("profile_note") or "Made By Joseph", inline=False)
+        e.add_field(name="Nota", value=user.get("profile_note") or "Made By Joshi", inline=False)
         await interaction.followup.send(embed=e)
 
     @app_commands.command(name="nivel", description="Ver tu nivel y experiencia")

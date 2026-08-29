@@ -80,19 +80,27 @@ def random_between(a, b):
 def chunk_array(arr, size):
     return [arr[i:i+size] for i in range(0, len(arr), size)]
 
-def get_or_create_user(discord_id, guild_id):
+def get_or_create_user(discord_id, guild_id, username=None, display_name=None):
     row = execute(
         "SELECT * FROM users WHERE discord_id=$1 AND guild_id=$2",
         (discord_id, guild_id), fetch="one"
     )
     if row:
+        if username and (row.get("username") != username or (display_name and row.get("display_name") != display_name)):
+            execute(
+                "UPDATE users SET username=$1, display_name=$2, updated_at=NOW() WHERE discord_id=$3 AND guild_id=$4",
+                (username, display_name or username, discord_id, guild_id)
+            )
+            row["username"] = username
+            if display_name:
+                row["display_name"] = display_name
         return dict(row)
     execute(
-        """INSERT INTO users (id, discord_id, guild_id, cash, bank, xp, level, reputation, dirty_money,
+        """INSERT INTO users (id, discord_id, guild_id, username, display_name, cash, bank, xp, level, reputation, dirty_money,
            is_verified, created_at, updated_at)
-           VALUES ($1,$2,$3,500,0,0,1,0,0,false,NOW(),NOW())
+           VALUES ($1,$2,$3,$4,$5,500,0,0,1,0,0,false,NOW(),NOW())
            ON CONFLICT DO NOTHING""",
-        (generate_id(), discord_id, guild_id)
+        (generate_id(), discord_id, guild_id, username, display_name or username)
     )
     return dict(execute(
         "SELECT * FROM users WHERE discord_id=$1 AND guild_id=$2",
@@ -111,24 +119,40 @@ def get_or_create_guild_config(guild_id):
     )
     return dict(execute("SELECT * FROM guild_config WHERE guild_id=$1", (guild_id,), fetch="one"))
 
-async def async_get_or_create_user(discord_id, guild_id):
+async def async_get_or_create_user(discord_id, guild_id, username=None, display_name=None):
     row = await aexecute(
         "SELECT * FROM users WHERE discord_id=$1 AND guild_id=$2",
         (discord_id, guild_id), fetch="one"
     )
     if row:
+        if username and (row.get("username") != username or (display_name and row.get("display_name") != display_name)):
+            await aexecute(
+                "UPDATE users SET username=$1, display_name=$2, updated_at=NOW() WHERE discord_id=$3 AND guild_id=$4",
+                (username, display_name or username, discord_id, guild_id)
+            )
+            row["username"] = username
+            if display_name:
+                row["display_name"] = display_name
         return dict(row)
     await aexecute(
-        """INSERT INTO users (id, discord_id, guild_id, cash, bank, xp, level, reputation, dirty_money,
+        """INSERT INTO users (id, discord_id, guild_id, username, display_name, cash, bank, xp, level, reputation, dirty_money,
            is_verified, created_at, updated_at)
-           VALUES ($1,$2,$3,500,0,0,1,0,0,false,NOW(),NOW())
+           VALUES ($1,$2,$3,$4,$5,500,0,0,1,0,0,false,NOW(),NOW())
            ON CONFLICT DO NOTHING""",
-        (generate_id(), discord_id, guild_id)
+        (generate_id(), discord_id, guild_id, username, display_name or username)
     )
     return dict(await aexecute(
         "SELECT * FROM users WHERE discord_id=$1 AND guild_id=$2",
         (discord_id, guild_id), fetch="one"
     ))
+
+async def async_update_user_name(discord_id, guild_id, username, display_name=None):
+    if not username:
+        return
+    await aexecute(
+        "UPDATE users SET username=$1, display_name=$2, updated_at=NOW() WHERE discord_id=$3 AND guild_id=$4",
+        (username, display_name or username, str(discord_id), str(guild_id))
+    )
 
 async def async_get_or_create_guild_config(guild_id):
     row = await aexecute("SELECT * FROM guild_config WHERE guild_id=$1", (guild_id,), fetch="one")
