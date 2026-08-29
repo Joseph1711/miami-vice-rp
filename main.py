@@ -1,3 +1,13 @@
+import sys
+try:
+    import audioop
+except ModuleNotFoundError:
+    try:
+        import audioop_lts as audioop
+        sys.modules["audioop"] = audioop
+    except ImportError:
+        pass
+
 import os
 import asyncio
 import logging
