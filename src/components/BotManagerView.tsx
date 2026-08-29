@@ -338,8 +338,8 @@ export function BotManagerView() {
               <p>No hay mensajes en el registro. Inicia el bot para ver la salida en tiempo real.</p>
             </div>
           ) : (
-            filteredLogs.map(l => (
-              <div key={l.id} className="flex items-start gap-2.5 hover:bg-slate-900/40 px-1 py-0.5 rounded transition-colors leading-relaxed">
+              filteredLogs.map((l, index) => (
+                <div key={`${l.id}-${index}`} className="flex items-start gap-2.5 hover:bg-slate-900/40 px-1 py-0.5 rounded transition-colors leading-relaxed">
                 <span className="text-slate-600 text-[10px] select-none shrink-0 pt-0.5">{l.time}</span>
                 <span className={`text-[10px] px-1 rounded uppercase font-bold select-none shrink-0 ${
                   l.stream === 'stdout' 

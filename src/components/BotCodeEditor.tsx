@@ -131,12 +131,12 @@ export function BotCodeEditor() {
         </div>
 
         <div className="mt-3 overflow-y-auto flex-1 space-y-1 pr-1 font-mono text-xs">
-          {files.map(f => {
+          {files.map((f, idx) => {
             const isSelected = selectedFile === f.path;
             const badge = getFixBadge(f.path);
             return (
               <button
-                key={f.path}
+                key={`${f.path}-${idx}`}
                 onClick={() => setSelectedFile(f.path)}
                 className={`w-full text-left px-2.5 py-1.5 rounded-lg flex flex-col gap-0.5 transition-all ${
                   isSelected 
