@@ -76,11 +76,11 @@ export const DiagnosticOverview: React.FC<DiagnosticOverviewProps> = ({
 
       {/* Issues Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {issues.map((issue) => {
+        {issues.map((issue, issueIdx) => {
           const isSelected = selectedIssueId === issue.id;
           return (
             <div
-              key={issue.id}
+              key={`diag-card-${issue.id}-${issueIdx}`}
               onClick={() => onSelectIssue(issue)}
               className={`p-5 rounded-xl border transition-all cursor-pointer text-left relative overflow-hidden group ${
                 isSelected

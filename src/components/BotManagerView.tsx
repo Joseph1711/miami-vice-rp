@@ -296,7 +296,7 @@ export function BotManagerView() {
             <div className="flex rounded-lg bg-slate-950 p-0.5 border border-slate-800 text-[11px] font-mono">
               {(['all', 'stdout', 'stderr', 'system'] as const).map(f => (
                 <button
-                  key={f}
+                  key={`log-filter-btn-${f}`}
                   onClick={() => setFilterStream(f)}
                   className={`px-2 py-0.5 rounded capitalize transition-all ${
                     filterStream === f 

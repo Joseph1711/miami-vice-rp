@@ -175,9 +175,9 @@ export const CommandSimulator: React.FC<CommandSimulatorProps> = ({ commands }) 
         {/* Category Pill Filters */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-slate-800/60">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mr-1">Categorías:</span>
-          {categories.map(cat => (
+          {categories.map((cat, catIdx) => (
             <button
-              key={cat}
+              key={`category-${cat}-${catIdx}`}
               onClick={() => setSelectedCategory(cat)}
               className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 selectedCategory === cat
@@ -197,11 +197,11 @@ export const CommandSimulator: React.FC<CommandSimulatorProps> = ({ commands }) 
               No se encontraron comandos que coincidan con "{searchQuery}".
             </div>
           ) : (
-            filteredCommands.map((cmd) => {
+            filteredCommands.map((cmd, cmdIdx) => {
               const isSelected = activeCommand.command === cmd.command;
               return (
                 <button
-                  key={cmd.command}
+                  key={`cmd-sim-${cmd.command}-${cmdIdx}`}
                   onClick={() => {
                     setActiveCommand(cmd);
                     handleReset();
@@ -375,7 +375,7 @@ export const CommandSimulator: React.FC<CommandSimulatorProps> = ({ commands }) 
                   const isWarn = log.includes('⚠️') || log.includes('Timeout');
                   return (
                     <div
-                      key={i}
+                      key={`cmd-terminal-log-${i}`}
                       className={`leading-relaxed ${
                         isErr
                           ? 'text-rose-400 font-semibold'

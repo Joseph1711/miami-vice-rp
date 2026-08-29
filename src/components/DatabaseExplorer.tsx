@@ -165,11 +165,11 @@ export function DatabaseExplorer() {
           </div>
 
           <div className="mt-3 overflow-y-auto flex-1 space-y-1 pr-1 font-mono text-xs">
-            {stats?.tables.map(t => {
+            {stats?.tables.map((t, tIdx) => {
               const isSelected = selectedTable === t.name;
               return (
                 <button
-                  key={t.name}
+                  key={`table-name-${t.name}-${tIdx}`}
                   onClick={() => setSelectedTable(t.name)}
                   className={`w-full text-left px-3 py-2 rounded-lg flex items-center justify-between transition-all ${
                     isSelected 
@@ -233,7 +233,7 @@ export function DatabaseExplorer() {
                 <thead className="bg-slate-900/90 text-slate-400 sticky top-0 border-b border-slate-800 z-10">
                   <tr>
                     {columns.map(c => (
-                      <th key={c} className="p-2.5 font-semibold text-slate-300 whitespace-nowrap">
+                      <th key={`th-col-${c}`} className="p-2.5 font-semibold text-slate-300 whitespace-nowrap">
                         {c}
                       </th>
                     ))}
@@ -241,11 +241,11 @@ export function DatabaseExplorer() {
                 </thead>
                 <tbody className="divide-y divide-slate-800/60">
                   {filteredRows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-slate-900/40 transition-colors">
+                    <tr key={`db-row-${idx}-${row.id || idx}`} className="hover:bg-slate-900/40 transition-colors">
                       {columns.map(c => {
                         const isUserNameCol = c === 'username' || c === 'display_name';
                         return (
-                          <td key={c} className={`p-2.5 max-w-xs truncate whitespace-nowrap ${isUserNameCol ? 'text-cyan-300 font-semibold' : 'text-slate-300'}`}>
+                          <td key={`td-${idx}-${c}`} className={`p-2.5 max-w-xs truncate whitespace-nowrap ${isUserNameCol ? 'text-cyan-300 font-semibold' : 'text-slate-300'}`}>
                             {row[c] === null ? (
                               <span className="text-slate-600 italic">null</span>
                             ) : typeof row[c] === 'boolean' ? (

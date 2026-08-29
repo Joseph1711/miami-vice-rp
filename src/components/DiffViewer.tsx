@@ -30,11 +30,11 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
       {/* File Selector Tabs */}
       <div className="flex flex-wrap gap-2 items-center justify-between border-b border-slate-800 pb-3">
         <div className="flex flex-wrap gap-1.5">
-          {patches.map((patch) => {
+          {patches.map((patch, pIdx) => {
             const isActive = patch.filePath === currentPatch.filePath;
             return (
               <button
-                key={patch.filePath}
+                key={`diff-tab-${patch.filePath}-${pIdx}`}
                 onClick={() => {
                   setSelectedPath(patch.filePath);
                   if (onSelectFile) onSelectFile(patch.filePath);
@@ -116,7 +116,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
         <ul className="grid grid-cols-1 md:grid-cols-2 gap-1.5 pt-1 text-xs text-slate-300">
           {currentPatch.changesSummary.map((item, idx) => (
-            <li key={idx} className="flex items-start gap-2">
+            <li key={`diff-summary-item-${idx}`} className="flex items-start gap-2">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
               <span>{item}</span>
             </li>
@@ -136,7 +136,7 @@ export const DiffViewer: React.FC<DiffViewerProps> = ({
 
                 return (
                   <div
-                    key={i}
+                    key={`diff-code-line-${i}`}
                     className={`px-2 py-0.5 rounded leading-relaxed ${
                       isAdd
                         ? 'bg-emerald-950/60 text-emerald-300 border-l-2 border-emerald-500'
