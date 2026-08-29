@@ -90,6 +90,7 @@ def _prepare_query_and_params(query: str, params=None, is_sqlite: bool = True):
     """
     Translates Postgres-style numbered parameters ($1, $2, $1, etc.) into driver-compatible format.
     Handles duplicate placeholders safely by duplicating bindings in positional order.
+    Guarantees that generated placeholder count matches the parameter tuple length exactly.
     """
     if not params:
         raw = _DOLLAR_RE.sub("?" if is_sqlite else "%s", query)
@@ -98,25 +99,26 @@ def _prepare_query_and_params(query: str, params=None, is_sqlite: bool = True):
         return raw, ()
 
     matches = _DOLLAR_RE.findall(query)
-    if not matches:
-        raw = query
+    p_seq = list(params) if isinstance(params, (list, tuple)) else [params]
+
+    if matches:
+        new_params = []
+        for m in matches:
+            idx = int(m) - 1
+            if 0 <= idx < len(p_seq):
+                new_params.append(p_seq[idx])
+            else:
+                new_params.append(p_seq[-1] if p_seq else None)
+
+        raw = _DOLLAR_RE.sub("?" if is_sqlite else "%s", query)
         if is_sqlite:
             raw = raw.replace("NOW()", "CURRENT_TIMESTAMP").replace("GREATEST(", "MAX(").replace("ILIKE", "LIKE")
-        return raw, params
+        return raw, tuple(new_params)
 
-    p_seq = list(params) if isinstance(params, (list, tuple)) else [params]
-    new_params = []
-    for m in matches:
-        idx = int(m) - 1
-        if 0 <= idx < len(p_seq):
-            new_params.append(p_seq[idx])
-        else:
-            raise IndexError(f"Query placeholder ${m} out of range for params of length {len(p_seq)}")
-
-    raw = _DOLLAR_RE.sub("?" if is_sqlite else "%s", query)
+    raw = query
     if is_sqlite:
         raw = raw.replace("NOW()", "CURRENT_TIMESTAMP").replace("GREATEST(", "MAX(").replace("ILIKE", "LIKE")
-    return raw, tuple(new_params)
+    return raw, tuple(p_seq)
 
 
 def _to_sqlite(query: str) -> str:

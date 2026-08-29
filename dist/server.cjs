@@ -146,6 +146,25 @@ app.get("/api/bot/status", (req, res) => {
     cogsList
   });
 });
+function cleanPycache(dir) {
+  try {
+    const entries = import_fs.default.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = import_path.default.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "__pycache__") {
+          try {
+            import_fs.default.rmSync(full, { recursive: true, force: true });
+          } catch {
+          }
+        } else if (entry.name !== "node_modules" && entry.name !== ".git" && entry.name !== "dist") {
+          cleanPycache(full);
+        }
+      }
+    }
+  } catch {
+  }
+}
 app.post("/api/bot/start", (req, res) => {
   const result = startBotProcess();
   res.json(result);
@@ -159,6 +178,45 @@ app.post("/api/bot/restart", (req, res) => {
   setTimeout(() => {
     const result = startBotProcess();
     res.json({ success: true, message: "Bot reiniciado." });
+  }, 1e3);
+});
+app.post("/api/bot/reset-clean", (req, res) => {
+  const { wipeDb } = req.body || {};
+  if (botProcess && !botProcess.killed) {
+    try {
+      botProcess.kill("SIGKILL");
+    } catch {
+    }
+    botProcess = null;
+    botStartTime = null;
+  }
+  try {
+    (0, import_child_process.exec)("pkill -9 -f 'main.py'", () => {
+    });
+  } catch {
+  }
+  botLogs.length = 0;
+  logCounter = 0;
+  cleanPycache(process.cwd());
+  if (wipeDb) {
+    const dbPath = import_path.default.join(process.cwd(), "miami_vice.sqlite3");
+    if (import_fs.default.existsSync(dbPath)) {
+      try {
+        import_fs.default.unlinkSync(dbPath);
+        appendLog("system", "\u{1F5D1}\uFE0F Base de datos local SQLite eliminada para reinicio limpio.");
+      } catch (err) {
+        appendLog("stderr", `No se pudo eliminar SQLite: ${err.message}`);
+      }
+    }
+  }
+  appendLog("system", "\u{1F9F9} REINICIO LIMPIO EJECUTADO: Procesos finalizados, cach\xE9 .pyc purgado y logs reseteados.");
+  setTimeout(() => {
+    const result = startBotProcess();
+    res.json({
+      success: true,
+      message: "Bot reiniciado de forma limpia y completa (procesos reseteados, cach\xE9 .pyc purgado).",
+      result
+    });
   }, 1e3);
 });
 app.get("/api/bot/logs", (req, res) => {

@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { spawn, ChildProcess } from "child_process";
+import { spawn, exec, ChildProcess } from "child_process";
 import { createServer as createViteServer } from "vite";
 
 const app = express();
@@ -147,7 +147,25 @@ app.get("/api/bot/status", (req, res) => {
   });
 });
 
-// 2. Start / Stop / Restart
+function cleanPycache(dir: string) {
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === "__pycache__") {
+          try {
+            fs.rmSync(full, { recursive: true, force: true });
+          } catch {}
+        } else if (entry.name !== "node_modules" && entry.name !== ".git" && entry.name !== "dist") {
+          cleanPycache(full);
+        }
+      }
+    }
+  } catch {}
+}
+
+// 2. Start / Stop / Restart / Clean Reset
 app.post("/api/bot/start", (req, res) => {
   const result = startBotProcess();
   res.json(result);
@@ -163,6 +181,56 @@ app.post("/api/bot/restart", (req, res) => {
   setTimeout(() => {
     const result = startBotProcess();
     res.json({ success: true, message: "Bot reiniciado." });
+  }, 1000);
+});
+
+app.post("/api/bot/reset-clean", (req, res) => {
+  const { wipeDb } = req.body || {};
+
+  // 1. Terminate current process immediately
+  if (botProcess && !botProcess.killed) {
+    try {
+      botProcess.kill("SIGKILL");
+    } catch {}
+    botProcess = null;
+    botStartTime = null;
+  }
+
+  // Terminate any orphan python main.py processes
+  try {
+    exec("pkill -9 -f 'main.py'", () => {});
+  } catch {}
+
+  // 2. Clear log buffer
+  botLogs.length = 0;
+  logCounter = 0;
+
+  // 3. Purge cached python bytecode
+  cleanPycache(process.cwd());
+
+  // 4. Optionally wipe SQLite database for complete fresh state
+  if (wipeDb) {
+    const dbPath = path.join(process.cwd(), "miami_vice.sqlite3");
+    if (fs.existsSync(dbPath)) {
+      try {
+        fs.unlinkSync(dbPath);
+        appendLog("system", "🗑️ Base de datos local SQLite eliminada para reinicio limpio.");
+      } catch (err: any) {
+        appendLog("stderr", `No se pudo eliminar SQLite: ${err.message}`);
+      }
+    }
+  }
+
+  appendLog("system", "🧹 REINICIO LIMPIO EJECUTADO: Procesos finalizados, caché .pyc purgado y logs reseteados.");
+
+  // 5. Spawn clean bot process
+  setTimeout(() => {
+    const result = startBotProcess();
+    res.json({
+      success: true,
+      message: "Bot reiniciado de forma limpia y completa (procesos reseteados, caché .pyc purgado).",
+      result,
+    });
   }, 1000);
 });
 
