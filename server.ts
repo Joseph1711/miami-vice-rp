@@ -371,10 +371,12 @@ cur.execute("SELECT COUNT(*) FROM departments")
 dept_count = cur.fetchone()[0]
 if dept_count == 0:
     depts = [
-        (str(uuid.uuid4()), "999999999999999999", "Departamento de Policía de Miami", "CPD", "Seguridad y orden público", 500000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Cuerpo de Bomberos & Rescate", "CFD", "Atención a emergencias y rescates", 350000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Servicios Médicos de Emergencia", "EMS", "Atención médica y hospitalaria", 300000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Departamento de Justicia", "DOJ", "Leyes, juicios y sentencias", 250000, None, None, now, now)
+        (str(uuid.uuid4()), "999999999999999999", "Miami Police Department", "MPD", "Seguridad y orden público en la ciudad de Miami", 500000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Miami-Dade Fire & Rescue", "MDFR", "Atención médica, emergencias y rescates", 350000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Florida Highway Patrol", "FHP", "Patrullaje estatal y carreteras de Florida", 300000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Florida Department of Transportation", "FDOT", "Mantenimiento e infraestructura vial", 200000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Miami Beach Police Department", "MBPD", "Seguridad en la costa y zonas turísticas", 300000, None, None, now, now),
+        (str(uuid.uuid4()), "999999999999999999", "Florida Department of Justice", "FDOJ", "Cortes, juicios y leyes de Florida", 250000, None, None, now, now)
     ]
     for d in depts:
         cur.execute("""

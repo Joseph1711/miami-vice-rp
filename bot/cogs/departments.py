@@ -21,7 +21,19 @@ def check_cooldown(key, seconds):
     COOLDOWNS[key] = now
     return 0
 
-DEPT_EMOJI = {"CPD":"👮","CFD":"🚒","Sheriff":"⭐","ISP":"🚔","DOT":"🚧","DOJ":"⚖️","EMA":"🏥"}
+DEPT_EMOJI = {
+    "MPD": "👮",     # Miami Police Department
+    "MDFR": "🚒",    # Miami Dade Fire & Rescue
+    "FHP": "🚔",     # Florida Highway Patrol
+    "FDOT": "🚧",    # Florida Department of Transportation
+    "MBPD": "🏖️",   # Miami Beach Police Department
+    "FDOJ": "⚖️",    # Florida Department of Justice
+    "EMS": "🚑",     # Emergency Medical Services
+    "Sheriff": "⭐", # Miami-Dade Sheriff / Police
+    "DOJ": "⚖️",
+    "CPD": "👮",     # Backward compatibility
+    "CFD": "🚒"      # Backward compatibility
+}
 
 class Departments(commands.Cog):
     def __init__(self, bot):
@@ -40,7 +52,7 @@ class Departments(commands.Cog):
             "SELECT * FROM departments WHERE guild_id=$1 ORDER BY name",
             (str(interaction.guild_id),), fetch="all"
         ) or []
-        e = department_embed("🏛️ Departamentos")
+        e = department_embed("🏛️ Departamentos de Miami")
         if not depts:
             e.description = "No hay departamentos creados"
         else:
@@ -56,7 +68,7 @@ class Departments(commands.Cog):
         await interaction.followup.send(embed=e)
 
     @departamento.command(name="info", description="Ver información de un departamento")
-    @app_commands.describe(acronimo="Acrónimo del departamento (CPD, CFD, etc.)")
+    @app_commands.describe(acronimo="Acrónimo del departamento (MPD, MDFR, FHP, FDOT, MBPD, FDOJ)")
     async def info(self, interaction: discord.Interaction, acronimo: str):
         await interaction.response.defer()
         dept = await aexecute(

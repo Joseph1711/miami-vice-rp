@@ -188,7 +188,7 @@ class Admin(commands.Cog):
     admin_dept = app_commands.Group(name="departamento", description="Gestión de departamentos", parent=admin)
 
     @admin_dept.command(name="crear", description="Crear un departamento")
-    @app_commands.describe(nombre="Nombre completo", acronimo="Acrónimo (CPD, CFD, etc.)", descripcion="Descripción", presupuesto="Presupuesto inicial")
+    @app_commands.describe(nombre="Nombre completo", acronimo="Acrónimo (MPD, MDFR, FHP, FDOT, MBPD, FDOJ)", descripcion="Descripción", presupuesto="Presupuesto inicial")
     async def dept_crear(self, interaction: discord.Interaction, nombre: str, acronimo: str, descripcion: str = "", presupuesto: int = 10000):
         await interaction.response.defer()
         if not admin_check(interaction):
@@ -726,10 +726,13 @@ class Admin(commands.Cog):
     @solicitar_group.command(name="aplicar", description="Solicitar unirse a un departamento o equipo")
     @app_commands.describe(tipo="Tipo de solicitud")
     @app_commands.choices(tipo=[
-        app_commands.Choice(name="👮 CPD", value="CPD"),
-        app_commands.Choice(name="🚒 CFD", value="CFD"),
-        app_commands.Choice(name="⭐ Sheriff", value="Sheriff"),
-        app_commands.Choice(name="🚧 DOT", value="DOT"),
+        app_commands.Choice(name="👮 MPD (Miami Police Dept)", value="MPD"),
+        app_commands.Choice(name="🚒 MDFR (Miami-Dade Fire & Rescue)", value="MDFR"),
+        app_commands.Choice(name="🚔 FHP (Florida Highway Patrol)", value="FHP"),
+        app_commands.Choice(name="🚧 FDOT (Florida Dept of Transportation)", value="FDOT"),
+        app_commands.Choice(name="🏖️ MBPD (Miami Beach Police)", value="MBPD"),
+        app_commands.Choice(name="⚖️ FDOJ (Florida Dept of Justice)", value="FDOJ"),
+        app_commands.Choice(name="⭐ Sheriff (Miami-Dade)", value="Sheriff"),
         app_commands.Choice(name="🛠️ Staff", value="Staff"),
     ])
     async def solicitar_aplicar(self, interaction: discord.Interaction, tipo: str):
