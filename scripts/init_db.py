@@ -530,25 +530,20 @@ def _ensure_profile_note():
 
 
 def init_db():
-    """Inicializa la BD solo si no está ya configurada."""
+    """Inicializa y verifica todas las tablas de la base de datos."""
     from bot.db import check_connection, initialize_schema
     
     result = check_connection()
     if not result["ok"]:
         raise RuntimeError(f"No se puede conectar a la base de datos: {result['error']}")
     
-    # Verificar si ya está inicializado
-    if _check_tables_exist():
-        logger.info("✅ Base de datos ya está inicializada. Omitiendo creación de tablas.")
-        return
-    
     try:
-        logger.info("🔧 Creando tablas de la base de datos...")
+        logger.info("🔧 Verificando / creando 38 tablas en la base de datos...")
         initialize_schema(SCHEMA)
         _ensure_profile_note()
-        logger.info("✅ Base de datos inicializada correctamente.")
+        logger.info("✅ Base de datos lista y sincronizada (38 tablas disponibles).")
     except Exception as e:
-        logger.error(f"❌ Error al crear tablas: {e}")
+        logger.error(f"❌ Error al verificar/crear tablas: {e}")
         raise
 
 if __name__ == "__main__":

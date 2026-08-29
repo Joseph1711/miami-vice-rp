@@ -135,7 +135,20 @@ def _connect_postgres():
 
 
 def _connect():
-    return _connect_postgres() if USE_POSTGRES else _connect_sqlite()
+    global USE_POSTGRES, DB_BACKEND
+    if USE_POSTGRES:
+        try:
+            return _connect_postgres()
+        except Exception as pg_err:
+            logger.warning(f"[DB] Conexión a PostgreSQL fallida ({pg_err}). Usando fallback a SQLite...")
+            USE_POSTGRES = False
+            DB_BACKEND = "sqlite"
+            return _connect_sqlite()
+    return _connect_sqlite()
+
+
+def is_postgres() -> bool:
+    return USE_POSTGRES
 
 
 def get_conn():
@@ -154,8 +167,8 @@ def _fetch_result(cursor, fetch):
 
 
 def execute(query, params=None, fetch=None):
-    raw = _to_postgres(query) if USE_POSTGRES else _to_sqlite(query)
     conn = _connect()
+    raw = _to_postgres(query) if USE_POSTGRES else _to_sqlite(query)
     started = time.monotonic()
     try:
         if USE_POSTGRES:

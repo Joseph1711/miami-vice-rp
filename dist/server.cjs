@@ -237,40 +237,40 @@ app.post("/api/bot/save-file", (req, res) => {
 });
 app.get("/api/database/stats", (req, res) => {
   const pyCode = `
-import json, sqlite3, os
-db_path = 'miami_vice.sqlite3'
-if not os.path.exists(db_path):
-    print(json.dumps({"error": "Base de datos no encontrada"}))
-    exit(0)
-conn = sqlite3.connect(db_path)
-cur = conn.cursor()
-cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;")
-tables = [r[0] for r in cur.fetchall() if not r[0].startswith('sqlite_')]
-table_stats = []
-total_rows = 0
-for t in tables:
-    try:
-        cur.execute(f"SELECT COUNT(*) FROM \\"{t}\\"")
-        count = cur.fetchone()[0]
-        total_rows += count
-        table_stats.append({"name": t, "count": count})
-    except Exception:
-        pass
+import json
+try:
+    from bot.db import execute, check_connection, is_postgres
+    check_connection()
+    if is_postgres():
+        tables_rows = execute("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name", fetch="all") or []
+    else:
+        tables_rows = execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name", fetch="all") or []
 
-# Users summary
-cur.execute("SELECT COUNT(*), COALESCE(SUM(cash), 0), COALESCE(SUM(bank), 0) FROM users")
-u_count, total_cash, total_bank = cur.fetchone()
+    tables = [r["name"] for r in tables_rows]
+    table_stats = []
+    total_rows = 0
+    for t in tables:
+        try:
+            res = execute(f'SELECT COUNT(*) as c FROM "{t}"', fetch="one")
+            cnt = res["c"] if res else 0
+            total_rows += cnt
+            table_stats.append({"name": t, "count": cnt})
+        except Exception:
+            pass
 
-conn.close()
-print(json.dumps({
-    "tables": table_stats,
-    "totalTables": len(tables),
-    "totalRows": total_rows,
-    "userCount": u_count,
-    "totalEconomy": total_cash + total_bank,
-    "totalCash": total_cash,
-    "totalBank": total_bank
-}))
+    u_res = execute("SELECT COUNT(*) as c, COALESCE(SUM(cash), 0) as total_cash, COALESCE(SUM(bank), 0) as total_bank FROM users", fetch="one") if "users" in tables else {"c": 0, "total_cash": 0, "total_bank": 0}
+
+    print(json.dumps({
+        "tables": table_stats,
+        "totalTables": len(table_stats),
+        "totalRows": total_rows,
+        "userCount": u_res.get("c", 0) if u_res else 0,
+        "totalEconomy": int(u_res.get("total_cash", 0) or 0) + int(u_res.get("total_bank", 0) or 0) if u_res else 0,
+        "totalCash": int(u_res.get("total_cash", 0) or 0) if u_res else 0,
+        "totalBank": int(u_res.get("total_bank", 0) or 0) if u_res else 0
+    }))
+except Exception as e:
+    print(json.dumps({"error": str(e), "tables": [], "totalTables": 0, "totalRows": 0, "userCount": 0, "totalEconomy": 0, "totalCash": 0, "totalBank": 0}))
 `;
   const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
   let stdout = "";
@@ -278,7 +278,7 @@ print(json.dumps({
   child.stdout.on("data", (d) => stdout += d.toString());
   child.stderr.on("data", (d) => stderr += d.toString());
   child.on("close", (code) => {
-    if (code !== 0 || !stdout.trim()) {
+    if (!stdout.trim()) {
       return res.status(500).json({ error: stderr || "Error al consultar base de datos" });
     }
     try {
@@ -296,17 +296,13 @@ app.get("/api/database/table-data", (req, res) => {
     return res.status(400).json({ error: "Nombre de tabla inv\xE1lido" });
   }
   const pyCode = `
-import json, sqlite3
-conn = sqlite3.connect('miami_vice.sqlite3')
-conn.row_factory = sqlite3.Row
-cur = conn.cursor()
+import json
 try:
-    cur.execute(f"SELECT * FROM \\"${tableName}\\" LIMIT ${limit}")
-    rows = [dict(r) for r in cur.fetchall()]
-    print(json.dumps({"rows": rows, "count": len(rows)}))
+    from bot.db import execute
+    rows = execute(f'SELECT * FROM "{tableName}" LIMIT ${limit}', fetch="all") or []
+    print(json.dumps({"rows": rows, "count": len(rows)}, default=str))
 except Exception as e:
-    print(json.dumps({"error": str(e)}))
-conn.close()
+    print(json.dumps({"error": str(e), "rows": [], "count": 0}))
 `;
   const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
   let stdout = "";
@@ -314,7 +310,7 @@ conn.close()
   child.stdout.on("data", (d) => stdout += d.toString());
   child.stderr.on("data", (d) => stderr += d.toString());
   child.on("close", (code) => {
-    if (code !== 0 || !stdout.trim()) {
+    if (!stdout.trim()) {
       return res.status(500).json({ error: stderr || "Error al leer tabla" });
     }
     try {

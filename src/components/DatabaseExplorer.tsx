@@ -60,11 +60,21 @@ export function DatabaseExplorer() {
 
   useEffect(() => {
     fetchStats();
+    // Auto-refresh stats every 5 seconds for real-time synchronization with Discord bot
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (selectedTable) {
       fetchTableData(selectedTable);
+      // Auto-refresh active table data every 5 seconds
+      const interval = setInterval(() => {
+        fetchTableData(selectedTable);
+      }, 5000);
+      return () => clearInterval(interval);
     }
   }, [selectedTable]);
 

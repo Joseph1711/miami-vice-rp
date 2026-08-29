@@ -287,36 +287,50 @@ def api_bot_logs_clear():
 
 @app.route("/api/database/stats")
 def api_database_stats():
-    tables_list = [
-        "users", "guild_config", "departments", "department_members", 
-        "fleet_vehicles", "fleet_vehicle_types", "properties", "companies", 
-        "bank_accounts", "inventory", "marketplace_listings", "tickets", 
-        "crimes", "transactions", "daily_rewards", "drug_plants"
-    ]
-    table_stats = []
-    total_rows = 0
-    for t in tables_list:
-        try:
-            cnt = _safe_count(t)
-            table_stats.append({"name": t, "count": cnt})
-            total_rows += cnt
-        except Exception:
-            pass
+    try:
+        from bot.db import is_postgres, check_connection
+        check_connection()
+        if is_postgres():
+            tables_rows = _safe_query("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
+        else:
+            tables_rows = _safe_query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
 
-    user_count = _safe_count("users")
-    total_cash_rows = _safe_query("SELECT COALESCE(SUM(cash), 0) AS total_cash, COALESCE(SUM(bank), 0) AS total_bank FROM users")
-    total_cash = int(total_cash_rows[0]["total_cash"]) if total_cash_rows else 0
-    total_bank = int(total_cash_rows[0]["total_bank"]) if total_cash_rows else 0
+        tables_list = [r["name"] for r in tables_rows] if tables_rows else []
+        table_stats = []
+        total_rows = 0
+        for t in tables_list:
+            try:
+                cnt = _safe_count(t)
+                table_stats.append({"name": t, "count": cnt})
+                total_rows += cnt
+            except Exception:
+                pass
 
-    return jsonify({
-        "tables": table_stats,
-        "totalTables": len(tables_list),
-        "totalRows": total_rows,
-        "userCount": user_count,
-        "totalEconomy": total_cash + total_bank,
-        "totalCash": total_cash,
-        "totalBank": total_bank,
-    })
+        user_count = _safe_count("users") if "users" in tables_list else 0
+        total_cash_rows = _safe_query("SELECT COALESCE(SUM(cash), 0) AS total_cash, COALESCE(SUM(bank), 0) AS total_bank FROM users") if "users" in tables_list else []
+        total_cash = int(total_cash_rows[0]["total_cash"]) if total_cash_rows else 0
+        total_bank = int(total_cash_rows[0]["total_bank"]) if total_cash_rows else 0
+
+        return jsonify({
+            "tables": table_stats,
+            "totalTables": len(table_stats),
+            "totalRows": total_rows,
+            "userCount": user_count,
+            "totalEconomy": total_cash + total_bank,
+            "totalCash": total_cash,
+            "totalBank": total_bank,
+        })
+    except Exception as err:
+        logger.error(f"Error calculando estadísticas de BD: {err}")
+        return jsonify({
+            "tables": [],
+            "totalTables": 0,
+            "totalRows": 0,
+            "userCount": 0,
+            "totalEconomy": 0,
+            "totalCash": 0,
+            "totalBank": 0,
+        })
 
 
 @app.route("/api/database/table-data")
@@ -325,7 +339,7 @@ def api_database_table_data():
     limit = min(int(request.args.get("limit", 50)), 100)
     if not table_name.replace("_", "").isalnum():
         return jsonify({"error": "Nombre de tabla inválido"}), 400
-    rows = _safe_query(f"SELECT * FROM {table_name} LIMIT {limit}")
+    rows = _safe_query(f'SELECT * FROM "{table_name}" LIMIT {limit}')
     return jsonify({"rows": rows, "count": len(rows)})
 
 
