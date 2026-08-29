@@ -310,6 +310,13 @@ PAGE = """<!DOCTYPE html>
 </html>"""
 
 
+@app.route("/healthz")
+@app.route("/ping")
+@app.route("/health")
+def health_check():
+    return jsonify({"status": "ok", "service": "miami-vice-bot", "timestamp": time.time()}), 200
+
+
 @app.route("/")
 @app.route("/dashboard")
 def dashboard():
@@ -333,12 +340,36 @@ def bot_control():
 
 def keep_alive():
     import os
-    if os.environ.get("DISABLE_FLASK_PORT_3000", "1") == "1":
+    # Si explícitamente se desactiva Flask
+    if os.environ.get("DISABLE_FLASK") == "1":
+        logger.info("[KEEP_ALIVE] Servidor Flask desactivado por configuración.")
+        return
+
+    # Obtener el puerto asignado por Render o entorno (por defecto 10000 en Render Web Services o 3000)
+    is_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID"))
+    default_port = 10000 if is_render else 3000
+    try:
+        port = int(os.environ.get("PORT", str(default_port)))
+    except (ValueError, TypeError):
+        port = default_port
+
+    # En entorno local AI Studio con Node en puerto 3000, evitar colisión si DISABLE_FLASK_PORT_3000 está activo y port es 3000
+    if not is_render and os.environ.get("DISABLE_FLASK_PORT_3000") == "1" and port == 3000:
         logger.info("[KEEP_ALIVE] Servidor web principal gestionado por Express en puerto 3000.")
         return
+
+    def _run_server():
+        try:
+            # Desactivar logs ruidosos de werkzeug en producción
+            werkzeug_logger = logging.getLogger("werkzeug")
+            werkzeug_logger.setLevel(logging.WARNING)
+            app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
+        except Exception as e:
+            logger.warning(f"[KEEP_ALIVE] Error en servidor Flask (puerto {port}): {e}")
+
     try:
-        thread = threading.Thread(target=lambda: app.run(host="0.0.0.0", port=3000, use_reloader=False))
-        thread.daemon = True
+        thread = threading.Thread(target=_run_server, daemon=True)
         thread.start()
+        logger.info(f"[KEEP_ALIVE] Servidor web activo en 0.0.0.0:{port} (Listo para Render & Healthchecks) ✅")
     except Exception as e:
-        logger.warning(f"[KEEP_ALIVE] No se pudo iniciar servidor Flask secundario: {e}")
+        logger.warning(f"[KEEP_ALIVE] No se pudo iniciar hilo del servidor web: {e}")
