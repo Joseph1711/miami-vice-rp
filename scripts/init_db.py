@@ -44,6 +44,9 @@ CREATE TABLE IF NOT EXISTS guild_config (
     tax_rate NUMERIC DEFAULT 5,
     xp_multiplier NUMERIC DEFAULT 1.0,
     log_channel_id TEXT,
+    admin_role_id TEXT,
+    work_logs_channel_id TEXT,
+    applications_channel_id TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -487,6 +490,70 @@ CREATE TABLE IF NOT EXISTS criminal_missions (
 );
 
 -- =====================
+-- WORK SUBMISSIONS & EVIDENCE (TRABAJOS SECUNDARIOS)
+-- =====================
+CREATE TABLE IF NOT EXISTS work_submissions (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    job_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    evidence TEXT NOT NULL,
+    hours_or_shifts TEXT DEFAULT '1',
+    status TEXT DEFAULT 'pending',
+    reward_amount NUMERIC DEFAULT 0,
+    reward_xp INTEGER DEFAULT 0,
+    reviewer_id TEXT,
+    review_notes TEXT DEFAULT '',
+    created_at TIMESTAMP DEFAULT NOW(),
+    reviewed_at TIMESTAMP
+);
+
+-- =====================
+-- DNI / IDENTIDAD CIUDADANA & ROBLOX
+-- =====================
+CREATE TABLE IF NOT EXISTS dni_records (
+    id TEXT PRIMARY KEY,
+    discord_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
+    dni_number TEXT UNIQUE NOT NULL,
+    roblox_username TEXT NOT NULL,
+    roblox_id TEXT,
+    roblox_profile_url TEXT,
+    full_name TEXT NOT NULL,
+    age INTEGER NOT NULL,
+    birth_date TEXT,
+    gender TEXT DEFAULT 'No especificado',
+    nationality TEXT DEFAULT 'Estadounidense',
+    blood_type TEXT DEFAULT 'O+',
+    avatar_url TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(discord_id, guild_id)
+);
+
+-- =====================
+-- REGISTRO DE ARMAS & SERIES ÚNICAS
+-- =====================
+CREATE TABLE IF NOT EXISTS weapon_registries (
+    id TEXT PRIMARY KEY,
+    discord_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
+    serial_number TEXT UNIQUE NOT NULL,
+    weapon_name TEXT NOT NULL,
+    weapon_type TEXT NOT NULL,
+    caliber TEXT DEFAULT '9mm',
+    license_type TEXT DEFAULT 'Defensa Personal',
+    status TEXT DEFAULT 'active',
+    dni_number TEXT,
+    roblox_username TEXT,
+    notes TEXT DEFAULT '',
+    registered_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
 -- DB INITIALIZATION STATE
 -- =====================
 CREATE TABLE IF NOT EXISTS db_state (
@@ -527,13 +594,26 @@ def _ensure_profile_note():
     try:
         if USE_POSTGRES:
             execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
         else:
-            columns = execute("PRAGMA table_info(users)", fetch="all") or []
-            if not any(column.get("name") == "profile_note" for column in columns):
+            u_cols = execute("PRAGMA table_info(users)", fetch="all") or []
+            if not any(column.get("name") == "profile_note" for column in u_cols):
                 execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joshi'")
+            
+            g_cols = execute("PRAGMA table_info(guild_config)", fetch="all") or []
+            g_names = [col.get("name") for col in g_cols]
+            if "admin_role_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN admin_role_id TEXT")
+            if "work_logs_channel_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN work_logs_channel_id TEXT")
+            if "applications_channel_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN applications_channel_id TEXT")
+        
         execute("UPDATE users SET profile_note='Made By Joshi' WHERE profile_note IS NULL OR profile_note='Made By Joseph'")
     except Exception as e:
-        logger.warning(f"Error al agregar profile_note: {e}")
+        logger.warning(f"Error al agregar columnas adicionales: {e}")
 
 
 def init_db():
@@ -545,10 +625,10 @@ def init_db():
         raise RuntimeError(f"No se puede conectar a la base de datos: {result['error']}")
     
     try:
-        logger.info("🔧 Verificando / creando 38 tablas en la base de datos...")
+        logger.info("🔧 Verificando / creando tablas en la base de datos...")
         initialize_schema(SCHEMA)
         _ensure_profile_note()
-        logger.info("✅ Base de datos lista y sincronizada (38 tablas disponibles).")
+        logger.info("✅ Base de datos lista y sincronizada (tablas completas disponibles).")
     except Exception as e:
         logger.error(f"❌ Error al verificar/crear tablas: {e}")
         raise

@@ -167,3 +167,71 @@ async def async_get_or_create_guild_config(guild_id):
     return dict(await aexecute(
         "SELECT * FROM guild_config WHERE guild_id=$1", (guild_id,), fetch="one"
     ))
+
+async def check_admin_permission(interaction) -> bool:
+    """
+    Verifica si el usuario tiene permisos de administración:
+    1. Administrador del servidor nativo en Discord
+    2. Posee el rol configurado en guild_config.admin_role_id
+    """
+    if not interaction.guild or not interaction.user:
+        return False
+    
+    # 1. Permiso de Administrador en Discord
+    if getattr(interaction.user, "guild_permissions", None) and interaction.user.guild_permissions.administrator:
+        return True
+    
+    # 2. Rol de Admin configurado
+    try:
+        config = await async_get_or_create_guild_config(str(interaction.guild.id))
+        admin_role_id = config.get("admin_role_id")
+        if admin_role_id:
+            target_role_id = int(admin_role_id)
+            user_roles = getattr(interaction.user, "roles", [])
+            if any(role.id == target_role_id for role in user_roles):
+                return True
+    except Exception:
+        pass
+    
+    return False
+
+def check_admin_permission_sync(member, guild_id: str) -> bool:
+    """Versión sincrónica de comprobación de permisos de admin."""
+    if getattr(member, "guild_permissions", None) and member.guild_permissions.administrator:
+        return True
+    try:
+        config = get_or_create_guild_config(str(guild_id))
+        admin_role_id = config.get("admin_role_id")
+        if admin_role_id:
+            target_role_id = int(admin_role_id)
+            user_roles = getattr(member, "roles", [])
+            if any(role.id == target_role_id for role in user_roles):
+                return True
+    except Exception:
+        pass
+    return False
+
+async def generate_unique_dni(guild_id: str) -> str:
+    """Genera un número de DNI único y aleatorio (ej. MIA-849201)."""
+    import random
+    for _ in range(20):
+        num = random.randint(100000, 999999)
+        dni = f"MIA-{num}"
+        existing = await aexecute("SELECT id FROM dni_records WHERE dni_number=$1", (dni,), fetch="one")
+        if not existing:
+            return dni
+    return f"MIA-{uuid.uuid4().hex[:6].upper()}"
+
+async def generate_unique_weapon_serial(guild_id: str) -> str:
+    """Genera un número de serie único y aleatorio para armas (ej. MV-WPN-73921-FL)."""
+    import random
+    import string
+    for _ in range(20):
+        num = random.randint(10000, 99999)
+        letters = "".join(random.choices(string.ascii_uppercase, k=2))
+        serial = f"MV-WPN-{num}-{letters}"
+        existing = await aexecute("SELECT id FROM weapon_registries WHERE serial_number=$1", (serial,), fetch="one")
+        if not existing:
+            return serial
+    return f"MV-WPN-{uuid.uuid4().hex[:8].upper()}"
+

@@ -54,6 +54,9 @@ COGS = [
     "bot.cogs.tickets",
     "bot.cogs.verification",
     "bot.cogs.crimen",
+    "bot.cogs.dni",
+    "bot.cogs.weapons",
+    "bot.cogs.roblox",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]

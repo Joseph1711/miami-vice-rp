@@ -341,10 +341,12 @@ try:
 
     CATEGORY_MAP = {
         "users": ("users_config", "Cuentas de ciudadanos, saldos, niveles, XP y reputación"),
+        "dni_records": ("users_config", "Registros de Documento Nacional de Identidad (DNI) y datos IC"),
         "guild_config": ("users_config", "Configuración general del servidor de Discord"),
         "verification_config": ("users_config", "Configuración de verificación y roles"),
         "verification_logs": ("users_config", "Auditoría de usuarios verificados"),
         "db_state": ("users_config", "Control de versiones y estado del esquema"),
+        "work_submissions": ("economy_banking", "Evidencias y reportes de trabajo secundario pendientes/aprobados"),
         "transactions": ("economy_banking", "Historial de transferencias y transacciones"),
         "treasury": ("economy_banking", "Tesorería y fondos públicos de la ciudad"),
         "savings_accounts": ("economy_banking", "Cuentas de ahorros con devengo de intereses"),
@@ -359,6 +361,7 @@ try:
         "department_audit": ("departments_fleet", "Auditoría de fondos departamentales"),
         "fleet_vehicle_types": ("departments_fleet", "Tipos y modelos de patrullas y vehículos"),
         "fleet_vehicles": ("departments_fleet", "Unidades en servicio por departamento"),
+        "weapon_registries": ("crime_drugs", "Registro balístico y licencias de armas de fuego"),
         "criminal_missions": ("crime_drugs", "Misiones y golpes delictivos"),
         "drug_operations": ("crime_drugs", "Laboratorios y cultivos clandestinos"),
         "money_laundering": ("crime_drugs", "Operaciones de lavado de dinero"),
