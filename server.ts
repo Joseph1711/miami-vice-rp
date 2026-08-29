@@ -54,6 +54,7 @@ function startBotProcess(): { success: boolean; message: string } {
       env: {
         ...process.env,
         PYTHONUNBUFFERED: "1",
+        DISABLE_FLASK_PORT_3000: "1",
       },
     });
 

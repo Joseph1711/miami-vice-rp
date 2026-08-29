@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS auctions (
     guild_id TEXT NOT NULL,
     seller_id TEXT NOT NULL,
     item_id TEXT NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    quantity INTEGER DEFAULT 1,
     starting_bid NUMERIC NOT NULL,
     current_bid NUMERIC,
     current_bidder_id TEXT,

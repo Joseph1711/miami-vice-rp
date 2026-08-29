@@ -67,7 +67,8 @@ function startBotProcess() {
       cwd: process.cwd(),
       env: {
         ...process.env,
-        PYTHONUNBUFFERED: "1"
+        PYTHONUNBUFFERED: "1",
+        DISABLE_FLASK_PORT_3000: "1"
       }
     });
     botStartTime = Date.now();
