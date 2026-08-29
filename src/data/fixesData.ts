@@ -1,4 +1,4 @@
-import { DiagnosticIssue, FilePatch, SimulatedCommand } from "../types";
+import { DiagnosticIssue, FilePatch, SimulatedCommand } from '../types';
 
 export const DIAGNOSTIC_ISSUES: DiagnosticIssue[] = [
   {
@@ -124,75 +124,2163 @@ export const FILE_PATCHES: FilePatch[] = [
 
 export const SIMULATED_COMMANDS: SimulatedCommand[] = [
   {
-    "command": "/diario",
-    "description": "Reclamar recompensa diaria de dinero y XP",
+    "command": "/admin economia dar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Dar dinero a un jugador",
     "beforeBehavior": {
       "state": "infinite_loading",
-      "log": "[ERROR] TypeError: can't subtract offset-naive and offset-aware datetimes (last_daily - now) -> Handler colapsó. discord.py ignoró @bot.event on_app_command_error. Interaction deferral huérfana.",
-      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito por 15 minutos)",
+      "log": "[ERROR] Excepción no capturada en /admin economia dar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
       "timeElapsed": "∞ (Timeout Discord)"
     },
     "afterBehavior": {
       "state": "success",
-      "log": "[INFO] parse_db_datetime normalizó timestamp UTC -> elapsed: 91420s -> DB actualizada en 42ms -> followup.send(success_embed)",
-      "discordStatus": "✅ Respuesta inmediata (45ms)",
-      "timeElapsed": "45 ms",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin economia dar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Dar dinero a un jugador."
+    }
+  },
+  {
+    "command": "/admin economia quitar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Quitar dinero a un jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin economia quitar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin economia quitar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Quitar dinero a un jugador."
+    }
+  },
+  {
+    "command": "/admin objetos crear",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Crear un objeto nuevo",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin objetos crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin objetos crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Crear un objeto nuevo."
+    }
+  },
+  {
+    "command": "/admin objetos lista",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver todos los objetos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin objetos lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin objetos lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Ver todos los objetos."
+    }
+  },
+  {
+    "command": "/admin departamento crear",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Crear un departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin departamento crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin departamento crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Crear un departamento. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/admin propiedad crear",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Crear una propiedad",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin propiedad crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin propiedad crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Crear una propiedad."
+    }
+  },
+  {
+    "command": "/admin xp dar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Dar XP a un jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin xp dar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin xp dar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Dar XP a un jugador."
+    }
+  },
+  {
+    "command": "/admin xp quitar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Quitar XP a un jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin xp quitar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin xp quitar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Quitar XP a un jugador."
+    }
+  },
+  {
+    "command": "/admin xp multiplicador",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver/establecer el multiplicador de XP del servidor",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin xp multiplicador -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin xp multiplicador ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Ver/establecer el multiplicador de XP del servidor."
+    }
+  },
+  {
+    "command": "/admin reset usuario",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Restablecer economía de un jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin reset usuario -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin reset usuario ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Restablecer economía de un jugador."
+    }
+  },
+  {
+    "command": "/admin reset cooldowns",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Reiniciar los cooldowns de un jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin reset cooldowns -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin reset cooldowns ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Reiniciar los cooldowns de un jugador."
+    }
+  },
+  {
+    "command": "/admin recompensas agregar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Agregar recompensa de rol por nivel",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin recompensas agregar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin recompensas agregar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Agregar recompensa de rol por nivel."
+    }
+  },
+  {
+    "command": "/admin recompensas lista",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver recompensas de nivel configuradas",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin recompensas lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin recompensas lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Ver recompensas de nivel configuradas."
+    }
+  },
+  {
+    "command": "/admin recompensas quitar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Quitar recompensa de un nivel",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin recompensas quitar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin recompensas quitar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Quitar recompensa de un nivel."
+    }
+  },
+  {
+    "command": "/admin configuracion diario",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Configurar cantidad de /diario",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] TypeError: can't subtract offset-naive and offset-aware datetimes (last_daily - now) -> Handler colapsó.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion diario ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
       "embedTitle": "¡Recompensa Diaria!",
-      "embedContent": "Has recibido **$500** 💵 y **50 XP** de experiencia."
+      "embedContent": "Has recibido **00** 💵 y **50 XP** de experiencia acumulada."
     }
   },
   {
-    "command": "/balance",
-    "description": "Consultar saldo en efectivo y banco de usuario",
+    "command": "/admin configuracion semanal",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Configurar cantidad de /semanal",
     "beforeBehavior": {
       "state": "infinite_loading",
-      "log": "[WARN] DB_OPERATION_TIMEOUT_SECONDS alcanzado esperando conexión sin pool -> Exception unhandled -> Discord interaction token expirado",
-      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Sin respuesta)",
+      "log": "[ERROR] TypeError: can't subtract offset-naive and offset-aware datetimes en cálculo de semana.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
       "timeElapsed": "∞ (Timeout Discord)"
     },
     "afterBehavior": {
       "state": "success",
-      "log": "[INFO] aexecute(SELECT users) completado en 18ms -> followup.send(economy_embed)",
-      "discordStatus": "✅ Respuesta inmediata (22ms)",
-      "timeElapsed": "22 ms",
-      "embedTitle": "💰 Balance de Joshi",
-      "embedContent": "💵 Efectivo: $12,500 | 🏦 Banco: $85,000 | 💎 Patrimonio: $97,500"
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion semanal ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "¡Recompensa Semanal!",
+      "embedContent": "Has recibido **,500** 💵 y **250 XP** de bonificación semanal."
     }
   },
   {
-    "command": "/trabajar",
-    "description": "Realizar turno de trabajo para ganar salario",
+    "command": "/admin configuracion canal_log",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Configurar canal de logs del servidor",
     "beforeBehavior": {
       "state": "infinite_loading",
-      "log": "[ERROR] TypeError en cálculo de cooldown de trabajo -> Discord interaction sin resolver -> Cargando eternamente",
-      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito)",
+      "log": "[ERROR] Excepción no capturada en /admin configuracion canal_log -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
       "timeElapsed": "∞ (Timeout Discord)"
     },
     "afterBehavior": {
       "state": "success",
-      "log": "[INFO] get_elapsed_seconds() validó cooldown de 3600s -> Salario acreditado y registrado en transactions",
-      "discordStatus": "✅ Turno completado",
-      "timeElapsed": "38 ms",
-      "embedTitle": "💼 Turno Finalizado",
-      "embedContent": "Trabajaste como Chofer Ejecutivo y ganaste **$1,200** 💵 (+75 XP)."
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion canal_log ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Configurar canal de logs del servidor."
+    }
+  },
+  {
+    "command": "/admin configuracion verificacion",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Configurar sistema de verificación",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin configuracion verificacion -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion verificacion ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Configurar sistema de verificación."
+    }
+  },
+  {
+    "command": "/admin configuracion ver",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver todas las configuraciones actuales del servidor",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin configuracion ver -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion ver ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Ver todas las configuraciones actuales del servidor."
+    }
+  },
+  {
+    "command": "/admin configuracion tickets",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Configurar el sistema de tickets",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /admin configuracion tickets -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /admin configuracion tickets ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Configurar el sistema de tickets."
+    }
+  },
+  {
+    "command": "/adminshop agregar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Agregar objeto a la tienda",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /adminshop agregar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /adminshop agregar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Agregar objeto a la tienda."
+    }
+  },
+  {
+    "command": "/adminshop quitar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Quitar objeto de la tienda",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /adminshop quitar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /adminshop quitar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Quitar objeto de la tienda."
+    }
+  },
+  {
+    "command": "/adminshop predeterminados",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Cargar el catálogo legal de objetos en la tienda normal",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /adminshop predeterminados -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /adminshop predeterminados ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⚙️ Panel Administrativo",
+      "embedContent": "Acción de administrador ejecutada con permisos elevados: Cargar el catálogo legal de objetos en la tienda normal."
+    }
+  },
+  {
+    "command": "/adminshop mercadonegro",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Cargar el catálogo ilegal exclusivo del mercado negro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /adminshop mercadonegro -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /adminshop mercadonegro ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Cargar el catálogo ilegal exclusivo del mercado negro."
+    }
+  },
+  {
+    "command": "/tesoro info",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver el estado del tesoro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tesoro info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tesoro info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /tesoro info",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver el estado del tesoro."
+    }
+  },
+  {
+    "command": "/tesoro depositar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Depositar fondos al tesoro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tesoro depositar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tesoro depositar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /tesoro depositar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Depositar fondos al tesoro."
+    }
+  },
+  {
+    "command": "/tesoro financiar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Financiar un departamento desde el tesoro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tesoro financiar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tesoro financiar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /tesoro financiar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Financiar un departamento desde el tesoro."
+    }
+  },
+  {
+    "command": "/solicitar aplicar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Solicitar unirse a un departamento o equipo",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /solicitar aplicar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /solicitar aplicar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /solicitar aplicar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Solicitar unirse a un departamento o equipo."
+    }
+  },
+  {
+    "command": "/solicitar lista",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver solicitudes pendientes (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /solicitar lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /solicitar lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /solicitar lista",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver solicitudes pendientes (admin)."
+    }
+  },
+  {
+    "command": "/contrato lista",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Ver contratos disponibles",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /contrato lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /contrato lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /contrato lista",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver contratos disponibles."
+    }
+  },
+  {
+    "command": "/contrato crear",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Crear un contrato (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /contrato crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /contrato crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /contrato crear",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Crear un contrato (admin)."
+    }
+  },
+  {
+    "command": "/contrato aceptar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Aceptar un contrato",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /contrato aceptar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /contrato aceptar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /contrato aceptar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Aceptar un contrato."
+    }
+  },
+  {
+    "command": "/contrato completar",
+    "category": "Administración",
+    "cog": "admin",
+    "description": "Marcar un contrato como completado (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /contrato completar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /contrato completar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /contrato completar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Marcar un contrato como completado (admin)."
+    }
+  },
+  {
+    "command": "/banco depositar",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Depositar efectivo en el banco",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco depositar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco depositar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Depositar efectivo en el banco. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/banco retirar",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Retirar dinero del banco",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco retirar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco retirar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Retirar dinero del banco. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/banco info",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Ver información de tu cuenta bancaria",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Ver información de tu cuenta bancaria. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/banco ahorros",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Abrir una cuenta de ahorros (2% interés diario)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco ahorros -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco ahorros ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Abrir una cuenta de ahorros (2% interés diario). Saldo asegurado."
+    }
+  },
+  {
+    "command": "/banco prestamo",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Solicitar un préstamo bancario",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco prestamo -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco prestamo ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Solicitar un préstamo bancario. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/banco pagar",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Pagar un préstamo activo",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /banco pagar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /banco pagar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Pagar un préstamo activo. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/invertir crear",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Crear una nueva inversión",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /invertir crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /invertir crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Crear una nueva inversión. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/invertir portafolio",
+    "category": "Banca e Inversiones",
+    "cog": "bank",
+    "description": "Ver tus inversiones activas",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /invertir portafolio -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /invertir portafolio ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏦 Miami Vice Central Bank",
+      "embedContent": "Transacción bancaria aprobada: Ver tus inversiones activas. Saldo asegurado."
+    }
+  },
+  {
+    "command": "/empresa crear",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Crear tu propia empresa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa crear -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa crear ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Crear tu propia empresa. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/empresa info",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Ver información de una empresa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Ver información de una empresa. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/empresa contratar",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Contratar a un empleado",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa contratar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa contratar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Contratar a un empleado. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/empresa despedir",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Despedir a un empleado",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa despedir -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa despedir ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Despedir a un empleado. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/empresa miembros",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Ver empleados de tu empresa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa miembros -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa miembros ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Ver empleados de tu empresa. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/empresa depositar",
+    "category": "Empresas y Negocios",
+    "cog": "companies",
+    "description": "Depositar dinero en los fondos de la empresa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /empresa depositar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /empresa depositar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Corporación Miami",
+      "embedContent": "Gestión empresarial ejecutada: Depositar dinero en los fondos de la empresa. Fondos corporativos sincronizados."
+    }
+  },
+  {
+    "command": "/drogas sembrar",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Iniciar un cultivo de droga",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /drogas sembrar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /drogas sembrar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🌿 Operación de Narcotráfico",
+      "embedContent": "Operación procesada: Cultivo verificado en base de datos. Rendimiento estimado: **,800** en dinero sucio."
     }
   },
   {
     "command": "/drogas cosechar",
-    "description": "Cosechar plantaciones criminales listas",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Cosechar tu cultivo listo",
     "beforeBehavior": {
       "state": "infinite_loading",
-      "log": "[ERROR] AttributeError al evaluar timestamp string de cosecha -> Excepción silenciosa",
-      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito)",
+      "log": "[ERROR] Excepción no capturada en /drogas cosechar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
       "timeElapsed": "∞ (Timeout Discord)"
     },
     "afterBehavior": {
       "state": "success",
-      "log": "[INFO] Query harvest_at normalizada -> Estado actualizado a \"harvested\" -> dirty_money incrementado",
-      "discordStatus": "✅ Cosecha entregada",
-      "timeElapsed": "52 ms",
-      "embedTitle": "🌿 Cosecha exitosa — Marihuana",
-      "embedContent": "💵 Dinero sucio obtenido: **$1,450** entregado a tu inventario criminal."
+      "log": "[INFO] safe_defer(interaction) -> Lógica /drogas cosechar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🌿 Operación de Narcotráfico",
+      "embedContent": "Operación procesada: Cultivo verificado en base de datos. Rendimiento estimado: **,800** en dinero sucio."
+    }
+  },
+  {
+    "command": "/drogas info",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Ver el estado de tus cultivos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /drogas info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /drogas info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🌿 Operación de Narcotráfico",
+      "embedContent": "Operación procesada: Cultivo verificado en base de datos. Rendimiento estimado: **,800** en dinero sucio."
+    }
+  },
+  {
+    "command": "/lavar dinero",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Lavar dinero sucio",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /lavar dinero -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /lavar dinero ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🧼 Lavandería de Fondos",
+      "embedContent": "Lavado completado exitosamente a través de empresa fantasma. Comisión: **15%**."
+    }
+  },
+  {
+    "command": "/lavar info",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Ver métodos de lavado disponibles",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /lavar info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /lavar info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🧼 Lavandería de Fondos",
+      "embedContent": "Lavado completado exitosamente a través de empresa fantasma. Comisión: **15%**."
+    }
+  },
+  {
+    "command": "/misiones lista",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Ver misiones disponibles",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /misiones lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /misiones lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /misiones lista",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver misiones disponibles."
+    }
+  },
+  {
+    "command": "/misiones iniciar",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Iniciar una misión criminal",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /misiones iniciar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /misiones iniciar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /misiones iniciar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Iniciar una misión criminal."
+    }
+  },
+  {
+    "command": "/misiones completar",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Reclamar recompensa de misión completada",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /misiones completar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /misiones completar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /misiones completar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Reclamar recompensa de misión completada."
+    }
+  },
+  {
+    "command": "/misiones activas",
+    "category": "Crimen y Mercado Negro",
+    "cog": "crimen",
+    "description": "Ver tus misiones activas",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /misiones activas -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /misiones activas ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /misiones activas",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver tus misiones activas."
+    }
+  },
+  {
+    "command": "/departamento lista",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Ver todos los departamentos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Ver todos los departamentos. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento info",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Ver información de un departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Ver información de un departamento. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento unirse",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Solicitar unirse a un departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento unirse -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento unirse ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Solicitar unirse a un departamento. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento contratar",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Contratar a un miembro (requiere permisos)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento contratar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento contratar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Contratar a un miembro (requiere permisos). Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento despedir",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Despedir a un miembro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento despedir -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento despedir ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Despedir a un miembro. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento presupuesto",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Ver el presupuesto del departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento presupuesto -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento presupuesto ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Ver el presupuesto del departamento. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/departamento miembros",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Ver los miembros del departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /departamento miembros -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /departamento miembros ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏢 Departamento • Miami Vice",
+      "embedContent": "Registro departamental consultado: Ver los miembros del departamento. Estado activo en la base de datos."
+    }
+  },
+  {
+    "command": "/flota ver",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Ver la flota del departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota ver -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota ver ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/flota comprar",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Comprar vehículos para el departamento",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota comprar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota comprar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/flota solicitar",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Solicitar el uso de un vehículo de la flota",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota solicitar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota solicitar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/flota devolver",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Devolver un vehículo asignado",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota devolver -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota devolver ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/flota reparar",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Reportar un vehículo para reparación",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota reparar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota reparar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/flota gestionar",
+    "category": "Departamentos y Flota",
+    "cog": "departments",
+    "description": "Gestionar estado de un vehículo (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /flota gestionar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /flota gestionar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🚔 Flota Vehicular Departamental",
+      "embedContent": "Vehículo asignado e inspeccionado. Estado mecánico: 100% | Combustible: Lleno."
+    }
+  },
+  {
+    "command": "/balance",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Ver tu balance de efectivo y banco",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /balance -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /balance ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "💰 Balance Financiero",
+      "embedContent": "💵 Efectivo: **2,500** | 🏦 Banco: **5,000** | 💎 Patrimonio Total: **7,500**"
+    }
+  },
+  {
+    "command": "/diario",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Reclamar tu recompensa diaria",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] TypeError: can't subtract offset-naive and offset-aware datetimes (last_daily - now) -> Handler colapsó.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /diario ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "¡Recompensa Diaria!",
+      "embedContent": "Has recibido **00** 💵 y **50 XP** de experiencia acumulada."
+    }
+  },
+  {
+    "command": "/semanal",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Reclamar tu recompensa semanal",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] TypeError: can't subtract offset-naive and offset-aware datetimes en cálculo de semana.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /semanal ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "¡Recompensa Semanal!",
+      "embedContent": "Has recibido **,500** 💵 y **250 XP** de bonificación semanal."
+    }
+  },
+  {
+    "command": "/trabajar",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Trabajar para ganar dinero",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /trabajar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /trabajar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "💼 Turno Laboral Finalizado",
+      "embedContent": "Trabajaste como Chofer Ejecutivo en Miami y ganaste **,200** 💵 (+75 XP)."
+    }
+  },
+  {
+    "command": "/pagar",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Pagar dinero a otro jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /pagar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /pagar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /pagar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Pagar dinero a otro jugador."
+    }
+  },
+  {
+    "command": "/tabla",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Ver la tabla de líderes",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tabla -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tabla ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /tabla",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver la tabla de líderes."
+    }
+  },
+  {
+    "command": "/donar",
+    "category": "Economía y Finanzas",
+    "cog": "economy",
+    "description": "Donar dinero a un jugador, departamento o empresa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /donar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /donar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /donar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Donar dinero a un jugador, departamento o empresa."
+    }
+  },
+  {
+    "command": "/ayuda",
+    "category": "Ayuda e Información",
+    "cog": "help",
+    "description": "Ver todos los comandos disponibles",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ayuda -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ayuda ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /ayuda",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver todos los comandos disponibles."
+    }
+  },
+  {
+    "command": "/inventario",
+    "category": "Inventario y Objetos",
+    "cog": "inventory",
+    "description": "Ver tu inventario",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /inventario -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /inventario ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎒 Inventario de Personaje",
+      "embedContent": "📦 Objetos: **Teléfono Encriptado** (x1), **Glock-19** (x1), **Llaves de Penthouse** (x1)"
+    }
+  },
+  {
+    "command": "/dar",
+    "category": "Inventario y Objetos",
+    "cog": "inventory",
+    "description": "Dar un objeto a otro jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /dar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /dar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /dar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Dar un objeto a otro jugador."
+    }
+  },
+  {
+    "command": "/mercado lista",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Ver objetos en venta",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Ver objetos en venta."
+    }
+  },
+  {
+    "command": "/mercado vender",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Poner un objeto a la venta",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado vender -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado vender ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Poner un objeto a la venta."
+    }
+  },
+  {
+    "command": "/mercado comprar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Comprar un objeto del mercado",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado comprar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado comprar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Comprar un objeto del mercado."
+    }
+  },
+  {
+    "command": "/mercado subasta",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Crear una subasta de objetos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado subasta -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado subasta ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Crear una subasta de objetos."
+    }
+  },
+  {
+    "command": "/mercado pujar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Pujar en una subasta activa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado pujar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado pujar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Pujar en una subasta activa."
+    }
+  },
+  {
+    "command": "/mercado cancelar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Cancelar un listado propio del mercado",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercado cancelar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercado cancelar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Cancelar un listado propio del mercado."
+    }
+  },
+  {
+    "command": "/tienda explorar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Ver objetos disponibles en la tienda",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tienda explorar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tienda explorar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Ver objetos disponibles en la tienda."
+    }
+  },
+  {
+    "command": "/tienda comprar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Comprar un objeto de la tienda",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tienda comprar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tienda comprar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Comprar un objeto de la tienda."
+    }
+  },
+  {
+    "command": "/tienda info",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Ver detalles de un objeto de la tienda",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /tienda info -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /tienda info ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Ver detalles de un objeto de la tienda."
+    }
+  },
+  {
+    "command": "/mercadonegro explorar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Ver el stock del mercado negro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercadonegro explorar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercadonegro explorar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Ver el stock del mercado negro."
+    }
+  },
+  {
+    "command": "/mercadonegro comprar",
+    "category": "Mercado y Tiendas",
+    "cog": "marketplace",
+    "description": "Comprar del mercado negro",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /mercadonegro comprar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /mercadonegro comprar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛒 Mercado & Comercio",
+      "embedContent": "Catálogo comercial actualizado: Comprar del mercado negro."
+    }
+  },
+  {
+    "command": "/propiedad lista",
+    "category": "Bienes Raíces",
+    "cog": "properties",
+    "description": "Ver propiedades disponibles",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /propiedad lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /propiedad lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Ver propiedades disponibles."
+    }
+  },
+  {
+    "command": "/propiedad comprar",
+    "category": "Bienes Raíces",
+    "cog": "properties",
+    "description": "Comprar una propiedad",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /propiedad comprar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /propiedad comprar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Comprar una propiedad."
+    }
+  },
+  {
+    "command": "/propiedad vender",
+    "category": "Bienes Raíces",
+    "cog": "properties",
+    "description": "Vender tu propiedad (75% del valor)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /propiedad vender -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /propiedad vender ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Vender tu propiedad (75% del valor)."
+    }
+  },
+  {
+    "command": "/propiedad rentar",
+    "category": "Bienes Raíces",
+    "cog": "properties",
+    "description": "Rentar una propiedad",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /propiedad rentar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /propiedad rentar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Rentar una propiedad."
+    }
+  },
+  {
+    "command": "/propiedad mias",
+    "category": "Bienes Raíces",
+    "cog": "properties",
+    "description": "Ver tus propiedades",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /propiedad mias -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /propiedad mias ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🏠 Bienes Raíces de Miami",
+      "embedContent": "Consulta inmobiliaria procesada con éxito: Ver tus propiedades."
+    }
+  },
+  {
+    "command": "/reputacion dar",
+    "category": "Reputación y Niveles",
+    "cog": "social",
+    "description": "Dar reputación a otro jugador",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /reputacion dar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /reputacion dar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /reputacion dar",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Dar reputación a otro jugador."
+    }
+  },
+  {
+    "command": "/reputacion perfil",
+    "category": "Reputación y Niveles",
+    "cog": "social",
+    "description": "Ver perfil de reputación",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /reputacion perfil -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /reputacion perfil ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "Miami Vice • /reputacion perfil",
+      "embedContent": "Operación  ejecutada correctamente en el servidor. Ver perfil de reputación."
+    }
+  },
+  {
+    "command": "/nivel",
+    "category": "Reputación y Niveles",
+    "cog": "social",
+    "description": "Ver tu nivel y experiencia",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /nivel -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /nivel ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "⭐ Nivel y Reputación",
+      "embedContent": "Nivel actual: **Nivel 7** (1,450 / 2,000 XP) • Reputación: **+14 🌟**"
+    }
+  },
+  {
+    "command": "/ticket panel",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Crear un panel de tickets (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket panel -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket panel ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Crear un panel de tickets (admin)."
+    }
+  },
+  {
+    "command": "/ticket abrir",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Abrir un ticket de soporte",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket abrir -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket abrir ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Abrir un ticket de soporte."
+    }
+  },
+  {
+    "command": "/ticket cerrar",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Cerrar el ticket actual",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket cerrar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket cerrar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Cerrar el ticket actual."
+    }
+  },
+  {
+    "command": "/ticket lista",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Ver todos los tickets abiertos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket lista -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket lista ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Ver todos los tickets abiertos."
+    }
+  },
+  {
+    "command": "/ticket agregar",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Agregar un usuario al ticket actual",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket agregar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket agregar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Agregar un usuario al ticket actual."
+    }
+  },
+  {
+    "command": "/ticket remover",
+    "category": "Soporte y Tickets",
+    "cog": "tickets",
+    "description": "Remover un usuario del ticket actual",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /ticket remover -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /ticket remover ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🎫 Sistema de Tickets y Soporte",
+      "embedContent": "Ticket procesado de forma segura: Remover un usuario del ticket actual."
+    }
+  },
+  {
+    "command": "/verificar panel",
+    "category": "Verificación y Seguridad",
+    "cog": "verification",
+    "description": "Crear el panel de verificación (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /verificar panel -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /verificar panel ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛡️ Centro de Verificación",
+      "embedContent": "Estado de verificación actualizado: Crear el panel de verificación (admin). Roles asignados."
+    }
+  },
+  {
+    "command": "/verificar estado",
+    "category": "Verificación y Seguridad",
+    "cog": "verification",
+    "description": "Ver tu estado de verificación",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /verificar estado -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /verificar estado ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛡️ Centro de Verificación",
+      "embedContent": "Estado de verificación actualizado: Ver tu estado de verificación. Roles asignados."
+    }
+  },
+  {
+    "command": "/verificar usuario",
+    "category": "Verificación y Seguridad",
+    "cog": "verification",
+    "description": "Ver el estado de verificación de otro usuario (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /verificar usuario -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /verificar usuario ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛡️ Centro de Verificación",
+      "embedContent": "Estado de verificación actualizado: Ver el estado de verificación de otro usuario (admin). Roles asignados."
+    }
+  },
+  {
+    "command": "/verificar revocar",
+    "category": "Verificación y Seguridad",
+    "cog": "verification",
+    "description": "Revocar la verificación de un usuario (admin)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada en /verificar revocar -> discord.py @bot.event on_app_command_error fue omitido -> Interaction deferral huérfana en Discord.",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] safe_defer(interaction) -> Lógica /verificar revocar ejecutada en 28ms -> followup.send(embed) completado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "32 ms",
+      "embedTitle": "🛡️ Centro de Verificación",
+      "embedContent": "Estado de verificación actualizado: Revocar la verificación de un usuario (admin). Roles asignados."
     }
   }
 ];

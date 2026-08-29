@@ -21,6 +21,8 @@ export interface FilePatch {
 
 export interface SimulatedCommand {
   command: string;
+  category?: string;
+  cog?: string;
   description: string;
   params?: string;
   beforeBehavior: {
