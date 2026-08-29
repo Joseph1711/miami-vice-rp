@@ -3,7 +3,13 @@
 Ejecutar una sola vez (o cuando se agreguen tablas nuevas).
 """
 import os
+import sys
 import logging
+
+# Ensure project root is in sys.path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if "." not in sys.path:
+    sys.path.insert(0, os.path.abspath("."))
 
 logger = logging.getLogger("bot")
 

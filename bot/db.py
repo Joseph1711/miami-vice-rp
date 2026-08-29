@@ -236,6 +236,12 @@ def _connect():
 
 
 def is_postgres() -> bool:
+    global USE_POSTGRES, DB_BACKEND
+    if USE_POSTGRES:
+        if psycopg is None or not DATABASE_URL:
+            USE_POSTGRES = False
+            DB_BACKEND = "sqlite"
+            return False
     return USE_POSTGRES
 
 

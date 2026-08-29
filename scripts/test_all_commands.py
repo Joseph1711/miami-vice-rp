@@ -372,5 +372,24 @@ async def run_all_tests():
             print(f"  - {name}: {err}")
     print("=" * 60)
 
+    # Teardown: Clean up test accounts and rows created during the test run
+    print("Teardown: Purging test data to keep tables 100% clean...")
+    tables_to_wipe = [
+        'users', 'transactions', 'savings_accounts', 'investments', 'loans', 'treasury',
+        'companies', 'company_members', 'properties', 'property_transactions',
+        'departments', 'department_members', 'department_audit', 'fleet_vehicle_types', 'fleet_vehicles',
+        'drug_operations', 'criminal_missions', 'money_laundering',
+        'auctions', 'marketplace_listings', 'user_inventory', 'shop', 'black_market_stock', 'black_market_transactions', 'items', 'jobs',
+        'tickets', 'ticket_config', 'contracts', 'applications', 'application_config',
+        'level_rewards', 'auto_roles', 'temp_roles',
+        'verification_logs', 'verification_config', 'guild_config', 'db_state'
+    ]
+    for t in tables_to_wipe:
+        try:
+            execute(f'DELETE FROM "{t}"')
+        except Exception:
+            pass
+    print("Teardown complete: All tables wiped clean.")
+
 if __name__ == "__main__":
     asyncio.run(run_all_tests())

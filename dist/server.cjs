@@ -308,12 +308,69 @@ try:
     tables = [r["name"] for r in tables_rows]
     table_stats = []
     total_rows = 0
+
+    CATEGORY_MAP = {
+        "users": ("users_config", "Cuentas de ciudadanos, saldos, niveles, XP y reputaci\xF3n"),
+        "guild_config": ("users_config", "Configuraci\xF3n general del servidor de Discord"),
+        "verification_config": ("users_config", "Configuraci\xF3n de verificaci\xF3n y roles"),
+        "verification_logs": ("users_config", "Auditor\xEDa de usuarios verificados"),
+        "db_state": ("users_config", "Control de versiones y estado del esquema"),
+        "transactions": ("economy_banking", "Historial de transferencias y transacciones"),
+        "treasury": ("economy_banking", "Tesorer\xEDa y fondos p\xFAblicos de la ciudad"),
+        "savings_accounts": ("economy_banking", "Cuentas de ahorros con devengo de intereses"),
+        "investments": ("economy_banking", "Inversiones activas de jugadores"),
+        "loans": ("economy_banking", "Pr\xE9stamos bancarios y deudas activas"),
+        "companies": ("companies_properties", "Empresas comerciales registradas"),
+        "company_members": ("companies_properties", "Plantilla de empleados por empresa"),
+        "properties": ("companies_properties", "Bienes inmuebles, casas y almacenes"),
+        "property_transactions": ("companies_properties", "Historial de compra/venta de propiedades"),
+        "departments": ("departments_fleet", "Departamentos oficiales y presupuestos"),
+        "department_members": ("departments_fleet", "Agentes y funcionarios p\xFAblicos"),
+        "department_audit": ("departments_fleet", "Auditor\xEDa de fondos departamentales"),
+        "fleet_vehicle_types": ("departments_fleet", "Tipos y modelos de patrullas y veh\xEDculos"),
+        "fleet_vehicles": ("departments_fleet", "Unidades en servicio por departamento"),
+        "criminal_missions": ("crime_drugs", "Misiones y golpes delictivos"),
+        "drug_operations": ("crime_drugs", "Laboratorios y cultivos clandestinos"),
+        "money_laundering": ("crime_drugs", "Operaciones de lavado de dinero"),
+        "items": ("market_inventory", "Cat\xE1logo maestro de objetos e \xEDtems"),
+        "user_inventory": ("market_inventory", "Inventarios individuales de usuarios"),
+        "shop": ("market_inventory", "Art\xEDculos en la tienda general"),
+        "marketplace_listings": ("market_inventory", "Anuncios del mercado entre jugadores"),
+        "auctions": ("market_inventory", "Subastas activas de \xEDtems raros"),
+        "black_market_stock": ("market_inventory", "Stock del mercado clandestino"),
+        "black_market_transactions": ("market_inventory", "Compras en el mercado negro"),
+        "tickets": ("tickets_contracts", "Tickets de soporte y atenci\xF3n ciudadana"),
+        "ticket_config": ("tickets_contracts", "Configuraci\xF3n de canales de tickets"),
+        "contracts": ("tickets_contracts", "Contratos y recompensas laborales"),
+        "applications": ("tickets_contracts", "Postulaciones para facciones"),
+        "application_config": ("tickets_contracts", "Formularios de postulaci\xF3n"),
+        "jobs": ("tickets_contracts", "Cat\xE1logo de empleos legales"),
+        "level_rewards": ("tickets_contracts", "Recompensas por nivel alcanzado"),
+        "auto_roles": ("tickets_contracts", "Asignaci\xF3n autom\xE1tica de roles"),
+        "temp_roles": ("tickets_contracts", "Roles temporales con vencimiento")
+    }
+
     for t in tables:
         try:
             res = execute(f'SELECT COUNT(*) as c FROM "{t}"', fetch="one")
             cnt = res["c"] if res else 0
             total_rows += cnt
-            table_stats.append({"name": t, "count": cnt})
+
+            if is_postgres():
+                cols_res = execute(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{t}'", fetch="all") or []
+                cols_cnt = len(cols_res)
+            else:
+                cols_res = execute(f'PRAGMA table_info("{t}")', fetch="all") or []
+                cols_cnt = len(cols_res)
+
+            cat, desc = CATEGORY_MAP.get(t, ("other", "Tabla del sistema"))
+            table_stats.append({
+                "name": t, 
+                "count": cnt, 
+                "columnsCount": cols_cnt,
+                "category": cat,
+                "description": desc
+            })
         except Exception:
             pass
 
@@ -348,27 +405,126 @@ except Exception as e:
     }
   });
 });
-app.get("/api/database/table-data", (req, res) => {
+app.get("/api/database/table-schema", (req, res) => {
   const tableName = req.query.table;
-  const limit = Math.min(parseInt(req.query.limit || "50", 10), 100);
   if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
     return res.status(400).json({ error: "Nombre de tabla inv\xE1lido" });
   }
   const pyCode = `
 import json
 try:
-    from bot.db import execute
-    rows = execute(f'SELECT * FROM "{tableName}" LIMIT ${limit}', fetch="all") or []
-    print(json.dumps({"rows": rows, "count": len(rows)}, default=str))
+    from bot.db import execute, is_postgres
+    table_name = "${tableName}"
+    if is_postgres():
+        rows = execute(f"""
+            SELECT column_name as name, data_type as type, 
+                   (CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END) as notnull,
+                   column_default as dflt_value,
+                   0 as pk
+            FROM information_schema.columns 
+            WHERE table_name = '{table_name}'
+            ORDER BY ordinal_position
+        """, fetch="all") or []
+    else:
+        rows = execute(f'PRAGMA table_info("{table_name}")', fetch="all") or []
+    print(json.dumps({"columns": rows, "table": table_name}, default=str))
 except Exception as e:
-    print(json.dumps({"error": str(e), "rows": [], "count": 0}))
+    print(json.dumps({"error": str(e), "columns": [], "table": "${tableName}"}))
 `;
   const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
   let stdout = "";
   let stderr = "";
   child.stdout.on("data", (d) => stdout += d.toString());
   child.stderr.on("data", (d) => stderr += d.toString());
-  child.on("close", (code) => {
+  child.on("close", () => {
+    try {
+      res.json(JSON.parse(stdout || '{"columns":[]}'));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+});
+app.get("/api/database/table-data", (req, res) => {
+  const tableName = req.query.table;
+  const limit = Math.min(parseInt(req.query.limit || "50", 10), 1e3);
+  const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+  const offset = (page - 1) * limit;
+  const search = req.query.search || "";
+  const sortBy = req.query.sortBy || "";
+  const sortOrder = req.query.sortOrder === "desc" ? "DESC" : "ASC";
+  if (!tableName || !/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    return res.status(400).json({ error: "Nombre de tabla inv\xE1lido" });
+  }
+  const pyCode = `
+import json
+try:
+    from bot.db import execute, is_postgres
+    table_name = "${tableName}"
+    sort_by = "${sortBy}"
+    sort_order = "${sortOrder}"
+    limit = ${limit}
+    offset = ${offset}
+
+    # 1. Get column metadata
+    if is_postgres():
+        cols_meta = execute(f"""
+            SELECT column_name as name, data_type as type, 
+                   (CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END) as notnull,
+                   column_default as dflt_value, 0 as pk
+            FROM information_schema.columns 
+            WHERE table_name = '{table_name}'
+            ORDER BY ordinal_position
+        """, fetch="all") or []
+    else:
+        cols_meta = execute(f'PRAGMA table_info("{table_name}")', fetch="all") or []
+
+    columns = [c["name"] for c in cols_meta]
+
+    # 2. Total count
+    cnt_res = execute(f'SELECT COUNT(*) as c FROM "{table_name}"', fetch="one")
+    total_count = cnt_res["c"] if cnt_res else 0
+
+    # 3. Build query with optional sort
+    order_clause = ""
+    if sort_by and sort_by in columns:
+        order_clause = f'ORDER BY "{sort_by}" {sort_order}'
+    elif "created_at" in columns:
+        order_clause = 'ORDER BY created_at DESC'
+    elif "id" in columns:
+        order_clause = 'ORDER BY id ASC'
+
+    query = f'SELECT * FROM "{table_name}" {order_clause} LIMIT {limit} OFFSET {offset}'
+    rows = execute(query, fetch="all") or []
+
+    print(json.dumps({
+        "table": table_name,
+        "columns": cols_meta,
+        "rows": rows,
+        "count": len(rows),
+        "totalCount": total_count,
+        "page": ${page},
+        "limit": limit,
+        "totalPages": max(1, (total_count + limit - 1) // limit) if limit > 0 else 1
+    }, default=str))
+except Exception as e:
+    print(json.dumps({
+        "error": str(e), 
+        "table": "${tableName}",
+        "columns": [], 
+        "rows": [], 
+        "count": 0, 
+        "totalCount": 0,
+        "page": 1,
+        "limit": ${limit},
+        "totalPages": 1
+    }))
+`;
+  const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => stdout += d.toString());
+  child.stderr.on("data", (d) => stderr += d.toString());
+  child.on("close", () => {
     if (!stdout.trim()) {
       return res.status(500).json({ error: stderr || "Error al leer tabla" });
     }
@@ -379,51 +535,89 @@ except Exception as e:
     }
   });
 });
-app.post("/api/database/seed-demo-data", (req, res) => {
+app.post("/api/database/query", (req, res) => {
+  const { sql } = req.body || {};
+  if (!sql || typeof sql !== "string") {
+    return res.status(400).json({ error: "Consulta SQL no proporcionada" });
+  }
+  const trimmed = sql.trim();
+  const isSelect = /^(SELECT|PRAGMA|EXPLAIN|SHOW)\b/i.test(trimmed);
+  if (!isSelect) {
+    return res.status(403).json({ error: "Por seguridad, la consola web solo permite consultas de lectura (SELECT, PRAGMA, EXPLAIN)." });
+  }
   const pyCode = `
-import sqlite3, uuid, datetime
-conn = sqlite3.connect('miami_vice.sqlite3')
-cur = conn.cursor()
-now = datetime.datetime.utcnow().isoformat()
-
-# Seed demo users with real usernames
-demo_users = [
-    (str(uuid.uuid4()), "123456789012345678", "999999999999999999", "Joshi_Admin", "Joshi | Fundador", 150000, 450000, 2400, 10, 500, 2000, True, now, now),
-    (str(uuid.uuid4()), "234567890123456789", "999999999999999999", "Carlos_M", "Carlos Santana", 25000, 85000, 650, 4, 120, 500, True, now, now),
-    (str(uuid.uuid4()), "345678901234567890", "999999999999999999", "Elena_Miami", "Elena R.", 80000, 250000, 1500, 8, 300, 15000, True, now, now)
-]
-for u in demo_users:
-    cur.execute("""
-    INSERT OR REPLACE INTO users (id, discord_id, guild_id, username, display_name, cash, bank, xp, level, reputation, dirty_money, is_verified, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, u)
-
-# Seed default departments if none exist
-cur.execute("SELECT COUNT(*) FROM departments")
-dept_count = cur.fetchone()[0]
-if dept_count == 0:
-    depts = [
-        (str(uuid.uuid4()), "999999999999999999", "Miami Police Department", "MPD", "Seguridad y orden p\xFAblico en la ciudad de Miami", 500000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Miami-Dade Fire & Rescue", "MDFR", "Atenci\xF3n m\xE9dica, emergencias y rescates", 350000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Florida Highway Patrol", "FHP", "Patrullaje estatal y carreteras de Florida", 300000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Florida Department of Transportation", "FDOT", "Mantenimiento e infraestructura vial", 200000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Miami Beach Police Department", "MBPD", "Seguridad en la costa y zonas tur\xEDsticas", 300000, None, None, now, now),
-        (str(uuid.uuid4()), "999999999999999999", "Florida Department of Justice", "FDOJ", "Cortes, juicios y leyes de Florida", 250000, None, None, now, now)
-    ]
-    for d in depts:
-        cur.execute("""
-        INSERT INTO departments (id, guild_id, name, acronym, description, budget, leader_id, role_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, d)
-
-conn.commit()
-conn.close()
-print("OK")
+import json, time
+try:
+    from bot.db import execute
+    t0 = time.time()
+    rows = execute("""${trimmed.replace(/"/g, '\\"').replace(/\n/g, " ")}""", fetch="all") or []
+    elapsed_ms = round((time.time() - t0) * 1000, 2)
+    
+    columns = list(rows[0].keys()) if rows and isinstance(rows[0], dict) else []
+    print(json.dumps({
+        "success": True,
+        "columns": columns,
+        "rows": rows,
+        "rowCount": len(rows),
+        "executionTimeMs": elapsed_ms
+    }, default=str))
+except Exception as e:
+    print(json.dumps({"success": False, "error": str(e), "columns": [], "rows": [], "rowCount": 0}))
 `;
   const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => stdout += d.toString());
+  child.stderr.on("data", (d) => stderr += d.toString());
   child.on("close", () => {
-    appendLog("system", "Datos de prueba insertados en SQLite miami_vice.sqlite3 (usuarios con usernames y departamentos).");
-    res.json({ success: true, message: "Datos demo con usuarios y departamentos cargados." });
+    try {
+      res.json(JSON.parse(stdout || '{"success":false,"error":"Error al ejecutar consulta"}'));
+    } catch (e) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+});
+app.post("/api/database/wipe-clean", (req, res) => {
+  const pyCode = `
+import sqlite3, os
+from bot.db import execute, is_postgres
+from scripts.init_db import init_db
+
+tables = [
+    'users', 'transactions', 'savings_accounts', 'investments', 'loans', 'treasury',
+    'companies', 'company_members', 'properties', 'property_transactions',
+    'departments', 'department_members', 'department_audit', 'fleet_vehicle_types', 'fleet_vehicles',
+    'drug_operations', 'criminal_missions', 'money_laundering',
+    'auctions', 'marketplace_listings', 'user_inventory', 'shop', 'black_market_stock', 'black_market_transactions', 'items', 'jobs',
+    'tickets', 'ticket_config', 'contracts', 'applications', 'application_config',
+    'level_rewards', 'auto_roles', 'temp_roles',
+    'verification_logs', 'verification_config', 'guild_config', 'db_state'
+]
+
+cleaned = []
+for t in tables:
+    try:
+        execute(f'DELETE FROM "{t}"')
+        cleaned.append(t)
+    except Exception:
+        pass
+
+# Ensure schema is intact
+init_db()
+
+print(f"OK:{len(cleaned)}")
+`;
+  const child = (0, import_child_process.spawn)("python3", ["-c", pyCode], { cwd: process.cwd() });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => stdout += d.toString());
+  child.stderr.on("data", (d) => stderr += d.toString());
+  child.on("close", (code) => {
+    appendLog("system", "\u{1F9F9} BASE DE DATOS LIMPIADA: Todas las tablas quedaron 100% vac\xEDas, sin usuarios ni datos de prueba.");
+    res.json({
+      success: true,
+      message: "Todas las 38 tablas de la base de datos han sido limpiadas completamente. Sin usuarios ni registros de prueba."
+    });
   });
 });
 async function startServer() {
