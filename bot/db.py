@@ -173,6 +173,15 @@ def _ensure_schema_migrations(conn):
             existing_cm = {row[1] for row in cursor_cm.fetchall()}
             if "username" not in existing_cm and len(existing_cm) > 0:
                 conn.execute("ALTER TABLE company_members ADD COLUMN username TEXT")
+
+            # auctions check
+            cursor_auc = conn.execute("PRAGMA table_info(auctions)")
+            existing_auc = {row[1] for row in cursor_auc.fetchall()}
+            if len(existing_auc) > 0:
+                if "quantity" not in existing_auc:
+                    conn.execute("ALTER TABLE auctions ADD COLUMN quantity INTEGER DEFAULT 1")
+                if "starting_price" not in existing_auc:
+                    conn.execute("ALTER TABLE auctions ADD COLUMN starting_price NUMERIC DEFAULT 0")
             conn.commit()
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")

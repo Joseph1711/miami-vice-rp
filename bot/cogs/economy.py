@@ -271,8 +271,8 @@ class Economy(commands.Cog):
             target_name = member.mention
         elif tipo == "departamento":
             dept = await aexecute(
-                "SELECT * FROM departments WHERE guild_id=$1 AND (acronym ILIKE $2 OR name ILIKE $2)",
-                (str(interaction.guild_id), objetivo), fetch="one"
+                "SELECT * FROM departments WHERE guild_id=$1 AND (acronym ILIKE $2 OR name ILIKE $3)",
+                (str(interaction.guild_id), objetivo, objetivo), fetch="one"
             )
             if not dept:
                 await async_add_cash(str(interaction.user.id), str(interaction.guild_id), cantidad)

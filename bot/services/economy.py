@@ -21,8 +21,8 @@ def add_cash(user_id, guild_id, amount):
 
 def remove_cash(user_id, guild_id, amount):
     changed = execute(
-        "UPDATE users SET cash=cash-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND cash >= $1",
-        (amount, user_id, guild_id), fetch="count"
+        "UPDATE users SET cash=cash-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND cash >= $4",
+        (amount, user_id, guild_id, amount), fetch="count"
     )
     return bool(changed)
 
@@ -34,8 +34,8 @@ def add_bank(user_id, guild_id, amount):
 
 def remove_bank(user_id, guild_id, amount):
     changed = execute(
-        "UPDATE users SET bank=bank-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND bank >= $1",
-        (amount, user_id, guild_id), fetch="count"
+        "UPDATE users SET bank=bank-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND bank >= $4",
+        (amount, user_id, guild_id, amount), fetch="count"
     )
     return bool(changed)
 
@@ -69,8 +69,8 @@ async def async_add_cash(user_id, guild_id, amount):
 
 async def async_remove_cash(user_id, guild_id, amount):
     changed = await aexecute(
-        "UPDATE users SET cash=cash-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND cash >= $1",
-        (amount, user_id, guild_id), fetch="count"
+        "UPDATE users SET cash=cash-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND cash >= $4",
+        (amount, user_id, guild_id, amount), fetch="count"
     )
     return bool(changed)
 
@@ -82,8 +82,8 @@ async def async_add_bank(user_id, guild_id, amount):
 
 async def async_remove_bank(user_id, guild_id, amount):
     changed = await aexecute(
-        "UPDATE users SET bank=bank-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND bank >= $1",
-        (amount, user_id, guild_id), fetch="count"
+        "UPDATE users SET bank=bank-$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3 AND bank >= $4",
+        (amount, user_id, guild_id, amount), fetch="count"
     )
     return bool(changed)
 

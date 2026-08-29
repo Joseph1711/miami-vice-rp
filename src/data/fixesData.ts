@@ -55,6 +55,22 @@ export const DIAGNOSTIC_ISSUES: DiagnosticIssue[] = [
       "bot/events.py",
       "bot/utils/response.py"
     ]
+  },
+  {
+    "id": "issue-sql-bindings-mismatch",
+    "title": "5. Discrepancia de Parámetros SQL: Incorrect number of bindings supplied",
+    "severity": "CRITICAL",
+    "category": "database",
+    "summary": "Mapeo posicional de parámetros ($1, $2, $3, $1) producía un número dispar de placeholders vs tupla de argumentos.",
+    "description": "Comandos como /invertir crear, /donar departamento y /mercado subasta invocaban consultas SQL que reutilizaban el placeholder $1 (e.g. UPDATE users SET cash=cash-$1 ... cash >= $1) enviando solo 3 parámetros para 4 interrogantes generadas. Esto disparaba sqlite3.ProgrammingError: Incorrect number of bindings supplied. The current statement uses 4, and there are 3 supplied.",
+    "rootCause": "Las funciones remove_cash, remove_bank, async_remove_cash, async_remove_bank y consultas en cogs usaban sintaxis que no correspondía 1:1 con la tupla de parámetros en tiempo de ejecución.",
+    "consequence": "Fallo inmediato al crear inversiones con /invertir crear, transferir fondos o crear subastas con error visible en Discord.",
+    "affectedFiles": [
+      "bot/services/economy.py",
+      "bot/cogs/economy.py",
+      "bot/cogs/marketplace.py",
+      "bot/db.py"
+    ]
   }
 ];
 

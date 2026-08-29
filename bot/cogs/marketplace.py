@@ -144,9 +144,9 @@ class Marketplace(commands.Cog):
         ends_at = datetime.datetime.utcnow() + datetime.timedelta(hours=horas)
         auction_id = generate_id()
         await aexecute(
-            """INSERT INTO auctions (id, guild_id, seller_id, item_id, quantity, starting_price, current_bid, ends_at, status, created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,$6,$7,'active',NOW(),NOW())""",
-            (auction_id, str(interaction.guild_id), str(interaction.user.id), item["id"], cantidad, precio_base, ends_at)
+            """INSERT INTO auctions (id, guild_id, seller_id, item_id, quantity, starting_bid, current_bid, ends_at, status, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'active',NOW(),NOW())""",
+            (auction_id, str(interaction.guild_id), str(interaction.user.id), item["id"], cantidad, precio_base, precio_base, ends_at)
         )
         emoji = item.get("emoji") or "📦"
         e = success_embed("🔨 Subasta creada", f"{emoji} **{item['name']}** x{cantidad}\nPrecio base: **{format_currency(precio_base)}**")
@@ -181,7 +181,7 @@ class Marketplace(commands.Cog):
         if now > ends_at:
             await interaction.followup.send(embed=error_embed("Subasta terminada", "Esta subasta ya cerró"), ephemeral=True)
             return
-        min_bid = float(auction["current_bid"] or auction["starting_price"]) + 1
+        min_bid = float(auction.get("current_bid") or auction.get("starting_bid") or auction.get("starting_price") or 0) + 1
         if cantidad < min_bid:
             await interaction.followup.send(embed=error_embed("Puja baja", f"La puja mínima es **{format_currency(min_bid)}**"), ephemeral=True)
             return
