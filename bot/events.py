@@ -33,7 +33,7 @@ STATUS_ACTIVITIES = [
 ]
 
 def setup_events(bot):
-    @tasks.loop(seconds=20)
+    @tasks.loop(seconds=35)
     async def rotate_presence():
         if not bot.is_ready():
             return
