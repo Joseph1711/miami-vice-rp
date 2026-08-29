@@ -345,6 +345,7 @@ class Admin(commands.Cog):
         await interaction.followup.send(embed=success_embed("Recompensa eliminada", f"Recompensa de nivel **{nivel}** eliminada"), ephemeral=True)
 
     admin_cfg = app_commands.Group(name="configuracion", description="Configuración del servidor", parent=admin)
+
     @admin_cfg.command(name="rol_admin", description="Configurar el rol de administrador para comandos admin")
     @app_commands.describe(rol="Rol que tendrá permisos de administrador")
     async def cfg_rol_admin(self, interaction: discord.Interaction, rol: discord.Role):
@@ -353,7 +354,7 @@ class Admin(commands.Cog):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
             return
         await async_get_or_create_guild_config(str(interaction.guild_id))
-        await aexecute("UPDATE guild_config SET admin_role_id=, updated_at=NOW() WHERE guild_id=", (str(rol.id), str(interaction.guild_id)))
+        await aexecute("UPDATE guild_config SET admin_role_id=$1, updated_at=NOW() WHERE guild_id=$2", (str(rol.id), str(interaction.guild_id)))
         await interaction.followup.send(embed=success_embed("Rol Admin Configurado", f"Los comandos administrativos ahora pueden ser usados por el rol {rol.mention}"), ephemeral=True)
 
     @admin_cfg.command(name="canal_trabajos", description="Configurar canal de revisiones para evidencias de trabajo")
@@ -364,8 +365,8 @@ class Admin(commands.Cog):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
             return
         await async_get_or_create_guild_config(str(interaction.guild_id))
-        await aexecute("UPDATE guild_config SET work_logs_channel_id=, updated_at=NOW() WHERE guild_id=", (str(canal.id), str(interaction.guild_id)))
-        await interaction.followup.send(embed=success_embed("Canal de Trabajos Configurado", f"Las evidencias de  se enviarán a {canal.mention}"), ephemeral=True)
+        await aexecute("UPDATE guild_config SET work_logs_channel_id=$1, updated_at=NOW() WHERE guild_id=$2", (str(canal.id), str(interaction.guild_id)))
+        await interaction.followup.send(embed=success_embed("Canal de Trabajos Configurado", f"Las evidencias de trabajo se enviarán a {canal.mention}"), ephemeral=True)
 
     @admin_cfg.command(name="canal_postulaciones", description="Configurar canal para postulaciones a departamentos")
     @app_commands.describe(canal="Canal donde se enviarán las solicitudes a departamentos")
@@ -374,9 +375,29 @@ class Admin(commands.Cog):
         if not await admin_check(interaction):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
             return
-        await async_get_or_create_guild_config(str(interaction.guild_id))
-        await aexecute("UPDATE guild_config SET applications_channel_id=, updated_at=NOW() WHERE guild_id=", (str(canal.id), str(interaction.guild_id)))
+        gid = str(interaction.guild_id)
+        cid = str(canal.id)
+        await async_get_or_create_guild_config(gid)
+        await aexecute("UPDATE guild_config SET applications_channel_id=$1, updated_at=NOW() WHERE guild_id=$2", (cid, gid))
+        
+        # Sync with application_config table as well
+        existing_app_cfg = await aexecute("SELECT id FROM application_config WHERE guild_id=$1", (gid,), fetch="one")
+        if existing_app_cfg:
+            await aexecute("UPDATE application_config SET log_channel_id=$1, updated_at=NOW() WHERE guild_id=$2", (cid, gid))
+        else:
+            await aexecute("INSERT INTO application_config (id, guild_id, log_channel_id, created_at, updated_at) VALUES ($1,$2,$3,NOW(),NOW())", (generate_id(), gid, cid))
+
         await interaction.followup.send(embed=success_embed("Canal de Postulaciones Configurado", f"Las solicitudes de departamentos se enviarán a {canal.mention}"), ephemeral=True)
+
+    @admin_cfg.command(name="solicitud", description="Alias: Configurar canal para postulaciones y solicitudes")
+    @app_commands.describe(canal="Canal donde se enviarán las postulaciones")
+    async def cfg_solicitud(self, interaction: discord.Interaction, canal: discord.TextChannel):
+        await self.cfg_canal_postulaciones(interaction, canal)
+
+    @admin_cfg.command(name="canal_solicitudes", description="Alias: Configurar canal para postulaciones a departamentos")
+    @app_commands.describe(canal="Canal donde se enviarán las solicitudes")
+    async def cfg_canal_solicitudes(self, interaction: discord.Interaction, canal: discord.TextChannel):
+        await self.cfg_canal_postulaciones(interaction, canal)
 
 
     @admin_cfg.command(name="diario", description="Configurar cantidad de /diario")
