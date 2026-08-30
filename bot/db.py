@@ -125,6 +125,9 @@ def _ensure_schema_migrations(conn):
             cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS gender TEXT")
             cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT")
             cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS character_slot INTEGER DEFAULT 1")
+            cursor.execute("ALTER TABLE dni_records DROP CONSTRAINT IF EXISTS dni_records_discord_id_guild_id_key")
+            cursor.execute("ALTER TABLE dni_records DROP CONSTRAINT IF EXISTS dni_records_guild_id_discord_id_key")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_dni_records_guild_discord ON dni_records (guild_id, discord_id)")
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")
 
