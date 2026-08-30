@@ -202,7 +202,7 @@ export function BotManagerView() {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-                El backend en Python (<code className="text-cyan-300 font-mono">main.py</code>) está completamente integrado en este entorno de trabajo con todos los Cogs (<code className="text-slate-300 font-mono">bot/cogs/</code>), helpers y base de datos SQLite/Supabase.
+                El backend en Python (<code className="text-cyan-300 font-mono">main.py</code>) está completamente integrado en este entorno de trabajo con todos los Cogs (<code className="text-slate-300 font-mono">bot/cogs/</code>), helpers y base de datos Supabase PostgreSQL.
               </p>
             </div>
           </div>

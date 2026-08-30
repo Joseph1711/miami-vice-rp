@@ -44,7 +44,7 @@ function sanitizePgUrl(url?: string): string {
     .replace(/:%5B([^%]+)%5D@/i, ":$1@");
 }
 
-const DEFAULT_SUPABASE_URL = "postgresql://postgres:102093qvweerr@db.lbsmuouljgdcaxlcsnsb.supabase.co:5432/postgres";
+const DEFAULT_SUPABASE_URL = "postgresql://postgres.lbsmuouljgdcaxlcsnsb:102093qvweerr@aws-0-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require";
 const rawUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || DEFAULT_SUPABASE_URL;
 const SUPABASE_DB_URL = sanitizePgUrl(rawUrl);
 
