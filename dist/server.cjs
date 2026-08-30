@@ -57,7 +57,7 @@ function sanitizePgUrl(url) {
   if (!url) return "";
   return url.replace(/:\[([^\]]+)\]@/, ":$1@").replace(/:%5B([^%]+)%5D@/i, ":$1@");
 }
-var DEFAULT_SUPABASE_URL = "postgresql://postgres:102093qvweerr@db.lbsmuouljgdcaxlcsnsb.supabase.co:5432/postgres";
+var DEFAULT_SUPABASE_URL = "postgresql://postgres.lbsmuouljgdcaxlcsnsb:102093qvweerr@aws-0-us-west-2.pooler.supabase.com:6543/postgres?sslmode=require";
 var rawUrl = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || DEFAULT_SUPABASE_URL;
 var SUPABASE_DB_URL = sanitizePgUrl(rawUrl);
 var pgPool = new import_pg.Pool({
