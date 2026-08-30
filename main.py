@@ -138,7 +138,7 @@ async def main():
         return
 
     # Intentar conectar con reintentos
-    max_retries = 3
+    max_retries = 10
     retry_count = 0
     
     while retry_count < max_retries:
@@ -152,20 +152,49 @@ async def main():
             logger.error("❌ Discord rechazó DISCORD_TOKEN; verifica que sea válido.")
             logger.error("La web continúa disponible en http://localhost:3000")
             raise
+        except discord.HTTPException as http_err:
+            retry_count += 1
+            is_429 = getattr(http_err, 'status', None) == 429 or "429" in str(http_err)
+            wait_time = min(30 * retry_count, 180) if is_429 else 10
+            
+            # Cerrar la sesión de aiohttp si quedó abierta para evitar 'Unclosed client session'
+            try:
+                if bot and not bot.is_closed():
+                    await bot.close()
+            except Exception:
+                pass
+
+            if is_429:
+                logger.warning(
+                    f"⚠️ Discord 429 Rate Limit (Demasiadas peticiones). "
+                    f"Esperando {wait_time}s antes de reintentar... ({retry_count}/{max_retries})"
+                )
+            else:
+                logger.warning(f"Error HTTP de Discord ({http_err}). Reintentando en {wait_time}s... ({retry_count}/{max_retries})")
+            
+            await asyncio.sleep(wait_time)
         except (discord.ConnectionClosed, OSError) as e:
             retry_count += 1
-            logger.warning(f"Conexión perdida: {e}. Reintentando en 5s... ({retry_count}/{max_retries})")
-            if retry_count >= max_retries:
-                logger.error("No se pudo conectar después de múltiples intentos.")
-                raise RuntimeError("Discord no está disponible después de múltiples intentos") from e
-            await asyncio.sleep(5)  # Esperar antes de reintentar
+            try:
+                if bot and not bot.is_closed():
+                    await bot.close()
+            except Exception:
+                pass
+            logger.warning(f"Conexión perdida: {e}. Reintentando en 10s... ({retry_count}/{max_retries})")
+            await asyncio.sleep(10)
         except Exception as error:
             logger.error(f"Error inesperado: {error}")
             retry_count += 1
+            try:
+                if bot and not bot.is_closed():
+                    await bot.close()
+            except Exception:
+                pass
             if retry_count >= max_retries:
+                logger.warning("Alcanzado límite de intentos. Manteniendo el panel web activo.")
                 await asyncio.Event().wait()
                 return
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
 
 if __name__ == "__main__":
     asyncio.run(main())
