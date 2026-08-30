@@ -114,6 +114,17 @@ def _ensure_schema_migrations(conn):
             cursor.execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'open'")
             cursor.execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS claimed_by TEXT")
             cursor.execute("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS closed_by TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS avatar_url TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS roblox_id TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS roblox_username TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS blood_type TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS nationality TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS birth_date TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS gender TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT")
+            cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS character_slot INTEGER DEFAULT 1")
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")
 
