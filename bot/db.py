@@ -128,6 +128,37 @@ def _ensure_schema_migrations(conn):
             cursor.execute("ALTER TABLE dni_records DROP CONSTRAINT IF EXISTS dni_records_discord_id_guild_id_key")
             cursor.execute("ALTER TABLE dni_records DROP CONSTRAINT IF EXISTS dni_records_guild_id_discord_id_key")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_dni_records_guild_discord ON dni_records (guild_id, discord_id)")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS server_status (
+                    guild_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'CLOSED',
+                    server_code TEXT DEFAULT 'MVERP',
+                    updated_by TEXT,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS server_votes (
+                    id TEXT PRIMARY KEY,
+                    guild_id TEXT NOT NULL,
+                    channel_id TEXT NOT NULL,
+                    message_id TEXT NOT NULL,
+                    creator_id TEXT NOT NULL,
+                    status TEXT DEFAULT 'active',
+                    duration_minutes INTEGER DEFAULT 5,
+                    ends_at TIMESTAMP WITH TIME ZONE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS server_vote_entries (
+                    vote_id TEXT NOT NULL,
+                    discord_id TEXT NOT NULL,
+                    choice TEXT NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    PRIMARY KEY (vote_id, discord_id)
+                )
+            """)
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")
 

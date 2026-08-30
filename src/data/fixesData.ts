@@ -2938,5 +2938,65 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "🛡️ Sistema de Verificación Oficial",
       "embedContent": "¡Bienvenido/a a **Miami Vice RP**!\n\nPresiona el botón **'Verificarme'** para completar tus datos y vincular tu cuenta de Roblox.\n\n🎁 **Roles otorgados:** `@Ciudadano` `@Verificado` `@Miembro`\n❌ **Rol retirado:** `@NoVerificado`"
     }
+  },
+  {
+    "command": "/abrir-servidor",
+    "category": "Control & Estado del Servidor",
+    "cog": "server_control",
+    "description": "Abrir oficialmente el servidor de Roleplay Miami Vice (MVERP) y persistir el estado OPEN",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /abrir-servidor no existía",
+      "discordStatus": "❌ No implementado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Servidor MVERP marcado como OPEN por Staff @Admin -> Base de datos actualizada.",
+      "discordStatus": "✅ Servidor Abierto",
+      "timeElapsed": "12 ms",
+      "embedTitle": "🟢 SERVIDOR ABIERTO",
+      "embedContent": "> **Miami Vice Roleplay está oficialmente abierto.**\n>\n> Ya puedes ingresar al servidor de Roleplay.\n>\n> **Código del servidor: `MVERP`**\n\n**Estado:** 🟢 Abierto\n**Código:** `MVERP`"
+    }
+  },
+  {
+    "command": "/cerrar-servidor",
+    "category": "Control & Estado del Servidor",
+    "cog": "server_control",
+    "description": "Cerrar las operaciones del servidor de Roleplay Miami Vice (MVERP) y persistir el estado CLOSED",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /cerrar-servidor no existía",
+      "discordStatus": "❌ No implementado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Servidor MVERP marcado como CLOSED por Staff @Admin -> Base de datos actualizada.",
+      "discordStatus": "✅ Servidor Cerrado",
+      "timeElapsed": "12 ms",
+      "embedTitle": "🔴 SERVIDOR CERRADO",
+      "embedContent": "> **Miami Vice Roleplay ha cerrado operaciones.**\n>\n> El servidor de Roleplay se encuentra actualmente cerrado y **no se puede ingresar al servidor**.\n>\n> Por favor, espera a la próxima apertura oficial.\n\n**Estado:** 🔴 Cerrado\n**Acceso:** 🚫 No disponible"
+    }
+  },
+  {
+    "command": "/votacion-servidor",
+    "category": "Control & Estado del Servidor",
+    "cog": "server_control",
+    "description": "Crear votación comunitaria oficial con reacciones 🟢 / 🔴 y botones interactivos para abrir el servidor",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Sistema de votación no existía",
+      "discordStatus": "❌ No implementado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Votación de apertura iniciada en #anuncios por 5 minutos -> Reacciones 🟢 y 🔴 agregadas.",
+      "discordStatus": "✅ Votación Iniciada",
+      "timeElapsed": "15 ms",
+      "embedTitle": "🗳️ Votación de Apertura",
+      "embedContent": "> ¿Deseas que **Miami Vice Roleplay** abra sus operaciones?\n\n🟢 **Sí — Abrir servidor**\n🔴 **No — Mantener cerrado**\n\n> ⚠️ **La reacción del bot no cuenta como voto.**"
+    }
   }
 ];

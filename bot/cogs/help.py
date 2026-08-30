@@ -238,6 +238,17 @@ HELP_CATEGORIES = {
             ("/adminshop mercadonegro", "Cargar catálogo de mercado negro"),
         ]
     },
+    "server_control": {
+        "emoji": "🌴",
+        "label": "Control & Estado del Servidor",
+        "commands": [
+            ("/abrir-servidor [canal] [anuncio]", "Abrir oficialmente Miami Vice Roleplay (MVERP)"),
+            ("/cerrar-servidor [canal] [motivo]", "Cerrar oficialmente las operaciones de Roleplay"),
+            ("/votacion-servidor [duracion] [canal]", "Crear votación interactiva para abrir el servidor"),
+            ("/estado-servidor", "Consultar si el servidor está ABIERTO o CERRADO"),
+            ("/finalizar-votacion", "Concluir de inmediato la votación activa (Staff)"),
+        ]
+    },
 }
 
 
