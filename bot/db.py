@@ -147,23 +147,54 @@ def connection_label() -> str:
 
 
 def _ensure_schema_migrations(conn):
-    """Adds missing columns like username, display_name if they do not exist yet."""
+    """Adds missing columns like username, display_name, dni_number, etc. if they do not exist yet."""
     try:
         if USE_POSTGRES:
             with conn.cursor() as cursor:
                 cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT")
                 cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_username TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_id TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_profile_url TEXT")
+                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dni_number TEXT")
                 cursor.execute("ALTER TABLE department_members ADD COLUMN IF NOT EXISTS username TEXT")
                 cursor.execute("ALTER TABLE company_members ADD COLUMN IF NOT EXISTS username TEXT")
+                cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT DEFAULT 'Ciudadano'")
+                cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS age INTEGER DEFAULT 18")
+                cursor.execute("ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()")
             conn.commit()
         else:
             cursor = conn.execute("PRAGMA table_info(users)")
             existing_cols = {row[1] for row in cursor.fetchall()}
-            if "username" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN username TEXT")
-            if "display_name" not in existing_cols:
-                conn.execute("ALTER TABLE users ADD COLUMN display_name TEXT")
+            for col, col_type in [
+                ("username", "TEXT"),
+                ("display_name", "TEXT"),
+                ("roblox_username", "TEXT"),
+                ("roblox_id", "TEXT"),
+                ("roblox_profile_url", "TEXT"),
+                ("dni_number", "TEXT")
+            ]:
+                if col not in existing_cols and len(existing_cols) > 0:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
             
+            # dni_records check
+            cursor_dni = conn.execute("PRAGMA table_info(dni_records)")
+            existing_dni = {row[1] for row in cursor_dni.fetchall()}
+            if len(existing_dni) > 0:
+                if "occupation" not in existing_dni:
+                    conn.execute("ALTER TABLE dni_records ADD COLUMN occupation TEXT DEFAULT 'Ciudadano'")
+                if "age" not in existing_dni:
+                    conn.execute("ALTER TABLE dni_records ADD COLUMN age INTEGER DEFAULT 18")
+
+            # weapon_registries check
+            cursor_wpn = conn.execute("PRAGMA table_info(weapon_registries)")
+            existing_wpn = {row[1] for row in cursor_wpn.fetchall()}
+            if len(existing_wpn) > 0:
+                if "created_at" not in existing_wpn:
+                    conn.execute("ALTER TABLE weapon_registries ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+                if "weapon_type" not in existing_wpn:
+                    conn.execute("ALTER TABLE weapon_registries ADD COLUMN weapon_type TEXT DEFAULT 'Arma de Fuego'")
+
             # department_members check
             cursor_dm = conn.execute("PRAGMA table_info(department_members)")
             existing_dm = {row[1] for row in cursor_dm.fetchall()}

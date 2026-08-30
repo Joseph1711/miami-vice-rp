@@ -47,40 +47,56 @@ class RegisterWeaponModal(discord.ui.Modal):
         gid = str(interaction.guild_id)
         uid = str(interaction.user.id)
 
-        # Check citizen DNI
-        dni = await aexecute(
-            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 AND status='active'",
-            (gid, uid), fetch="one"
-        )
-        if not dni:
-            await interaction.followup.send(embed=error_embed(
-                "Requiere DNI",
-                "Para registrar legalmente un arma de fuego debes contar con un DNI válido y activo. Tramítalo con `/dni crear`."
-            ), ephemeral=True)
-            return
+        try:
+            # Check citizen DNI
+            dni = await aexecute(
+                "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 AND status='active'",
+                (gid, uid), fetch="one"
+            )
+            if not dni:
+                await interaction.followup.send(embed=error_embed(
+                    "Requiere DNI",
+                    "Para registrar legalmente un arma de fuego debes contar con un DNI válido y activo. Tramítalo con `/dni crear`."
+                ), ephemeral=True)
+                return
 
-        serial_num = await generate_unique_weapon_serial(gid)
-        reg_id = generate_id()
+            # Get roblox username if linked
+            user_row = await aexecute(
+                "SELECT * FROM users WHERE guild_id=$1 AND discord_id=$2",
+                (gid, uid), fetch="one"
+            ) or {}
+            roblox_user = user_row.get("roblox_username") or dni.get("roblox_username")
 
-        await aexecute(
-            """INSERT INTO weapon_registries 
-               (id, guild_id, discord_id, weapon_name, serial_number, caliber, status, notes, registered_at, created_at, updated_at)
-               VALUES ($1,$2,$3,$4,$5,$6,'registered',$7,NOW(),NOW(),NOW())""",
-            (reg_id, gid, uid, self.weapon_name.value.strip(), serial_num, self.caliber.value.strip(), self.reason.value.strip())
-        )
+            serial_num = await generate_unique_weapon_serial(gid)
+            reg_id = generate_id()
+            w_name = self.weapon_name.value.strip()
+            w_cal = self.caliber.value.strip()
+            w_reason = self.reason.value.strip()
 
-        card = success_embed(
-            f"🔫 Licencia y Registro Balístico Emitido",
-            f"Tu arma ha sido registrada exitosamente en la base de datos balística de Miami."
-        )
-        card.add_field(name="🔫 Modelo", value=self.weapon_name.value.strip(), inline=True)
-        card.add_field(name="🔢 Número de Serie Único", value=f"`{serial_num}`", inline=True)
-        card.add_field(name="🎯 Calibre", value=self.caliber.value.strip(), inline=True)
-        card.add_field(name="🪪 Titular y DNI", value=f"{dni['full_name']} (`{dni['dni_number']}`)", inline=True)
-        card.add_field(name="📜 Justificación", value=self.reason.value.strip(), inline=False)
-        card.set_footer(text=f"ID Balístico: {reg_id[:8]} • Fecha: {datetime.datetime.utcnow().strftime('%Y-%m-%d')}")
+            await aexecute(
+                """INSERT INTO weapon_registries 
+                   (id, guild_id, discord_id, weapon_name, serial_number, caliber, weapon_type, status, dni_number, roblox_username, notes, registered_at, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,'Arma de Fuego','registered',$7,$8,$9,NOW(),NOW(),NOW())""",
+                (reg_id, gid, uid, w_name, serial_num, w_cal, dni['dni_number'], roblox_user, w_reason)
+            )
 
-        await interaction.followup.send(embed=card, ephemeral=True)
+            card = success_embed(
+                f"🔫 Licencia y Registro Balístico Emitido",
+                f"Tu arma ha sido registrada exitosamente en la base de datos balística de Miami."
+            )
+            card.add_field(name="🔫 Modelo", value=w_name, inline=True)
+            card.add_field(name="🔢 Número de Serie Único", value=f"`{serial_num}`", inline=True)
+            card.add_field(name="🎯 Calibre", value=w_cal, inline=True)
+            card.add_field(name="🪪 Titular y DNI", value=f"{dni['full_name']} (`{dni['dni_number']}`)", inline=True)
+            card.add_field(name="📜 Justificación", value=w_reason, inline=False)
+            card.set_footer(text=f"ID Balístico: {reg_id[:8]} • Fecha: {datetime.datetime.utcnow().strftime('%Y-%m-%d')}")
+
+            await interaction.followup.send(embed=card, ephemeral=True)
+        except Exception as e:
+            await interaction.followup.send(
+                embed=error_embed("Error en Registro Balístico", f"Ocurrió un error al registrar el arma: `{e}`"),
+                ephemeral=True
+            )
 
 
 class Weapons(commands.Cog):
