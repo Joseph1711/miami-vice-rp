@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, render_template_string
 
-from bot.db import execute, check_connection, DB_PATH
+from bot.db import execute, check_connection, connection_label
 
 app = Flask(__name__, static_folder="dist", static_url_path="")
 _bot_ref = None
@@ -237,7 +237,7 @@ def api_bot_status():
         "hasToken": has_token,
         "tokenMasked": token_masked,
         "dbExists": db_conn.get("ok", False),
-        "dbBackend": "Supabase Postgres" if os.environ.get("SUPABASE_DB_URL") else f"SQLite Local ({DB_PATH.name})",
+        "dbBackend": "Supabase Postgres",
         "cogsCount": len(cogs_list),
         "cogsList": cogs_list,
     })

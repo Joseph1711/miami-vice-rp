@@ -173,7 +173,7 @@ discord_ext_tasks.loop = lambda **kw: lambda f: f
 
 # Now setup sys.path and test database
 sys.path.insert(0, os.path.abspath("."))
-from bot.db import DB_PATH, check_connection, execute, aexecute, _prepare_query_and_params
+from bot.db import check_connection, execute, aexecute, _prepare_query_and_params
 from scripts.init_db import init_db
 
 init_db()

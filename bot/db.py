@@ -38,6 +38,7 @@ DATABASE_URL = _sanitize_pg_url(_raw_url)
 
 DB_BACKEND = "supabase"
 USE_POSTGRES = True
+DB_PATH = None
 SLOW_QUERY_MS = 500
 
 try:
