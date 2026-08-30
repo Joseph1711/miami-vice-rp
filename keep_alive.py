@@ -61,34 +61,60 @@ async def _start_bot_from_dashboard():
         _control_lock = asyncio.Lock()
     async with _control_lock:
         _bot_enabled = True
-        if not _bot_ref or not _bot_token:
+        token = _bot_token or os.environ.get("DISCORD_TOKEN")
+        if not token:
             return {"ok": False, "message": "El bot no tiene DISCORD_TOKEN configurado."}
         if _bot_task and not _bot_task.done():
             return {"ok": True, "message": "El bot ya está encendido o conectándose."}
+        
+        # Siempre crear una instancia nueva y limpia al encender desde el panel
         if _bot_factory:
             _bot_ref = _bot_factory()
             if _bot_configurator:
-                _bot_configurator(_bot_ref)
-        task = asyncio.create_task(_bot_ref.start(_bot_token))
+                try:
+                    _bot_configurator(_bot_ref)
+                except Exception as conf_err:
+                    logger.warning("Configurator warning: %s", conf_err)
+        elif _bot_ref is None or getattr(_bot_ref, "is_closed", lambda: False)():
+            try:
+                from main import MiamiViceBot, configure_bot
+                _bot_ref = MiamiViceBot()
+                configure_bot(_bot_ref)
+            except Exception as e:
+                logger.error("Error creating bot instance: %s", e)
+
+        if not _bot_ref:
+            return {"ok": False, "message": "No se pudo instanciar el cliente de Discord."}
+
+        task = asyncio.create_task(_bot_ref.start(token))
         task.add_done_callback(_log_finished_task)
         set_bot_task(task)
+        logger.info("Bot iniciado manualmente desde el panel de control.")
         return {"ok": True, "message": "Orden de encendido enviada."}
 
 
 async def _stop_bot_from_dashboard():
-    global _bot_enabled, _control_lock
+    global _bot_enabled, _control_lock, _bot_ref, _bot_task
     if _control_lock is None:
         _control_lock = asyncio.Lock()
     async with _control_lock:
         _bot_enabled = False
-        if _bot_ref and _bot_task and not _bot_task.done():
-            await _bot_ref.close()
-            return {"ok": True, "message": "Bot desconectado correctamente."}
-        return {"ok": True, "message": "El bot ya estaba apagado."}
+        if _bot_ref and not getattr(_bot_ref, "is_closed", lambda: True)():
+            try:
+                await _bot_ref.close()
+            except Exception as close_err:
+                logger.warning("Error closing bot client: %s", close_err)
+        if _bot_task and not _bot_task.done():
+            _bot_task.cancel()
+        _bot_ref = None
+        _bot_task = None
+        logger.info("Bot detenido manualmente desde el panel de control.")
+        return {"ok": True, "message": "Bot desconectado correctamente."}
 
 
 def _control_bot(action):
     if _bot_loop is None or _bot_loop.is_closed():
+        logger.warning("Loop no disponible en _control_bot")
         return {"ok": False, "message": "El ciclo de control del bot no está disponible."}
     coroutine = (
         _start_bot_from_dashboard()
@@ -96,10 +122,11 @@ def _control_bot(action):
         else _stop_bot_from_dashboard()
     )
     try:
-        return asyncio.run_coroutine_threadsafe(coroutine, _bot_loop).result(timeout=10)
+        future = asyncio.run_coroutine_threadsafe(coroutine, _bot_loop)
+        return future.result(timeout=12)
     except Exception as error:
         logger.error("Error controlando el bot desde el panel: %s", error)
-        return {"ok": False, "message": "No se pudo ejecutar la orden del bot."}
+        return {"ok": False, "message": f"Error ejecutando orden: {error}"}
 
 
 def format_uptime(seconds):

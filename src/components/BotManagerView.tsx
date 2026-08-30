@@ -98,11 +98,27 @@ export function BotManagerView() {
     }
   }, [logs, autoScroll]);
 
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const showFeedback = (type: 'success' | 'error', message: string) => {
+    setActionFeedback({ type, message });
+    setTimeout(() => setActionFeedback(null), 5000);
+  };
+
   const handleStart = async () => {
     setLoadingAction('start');
     try {
-      await fetch('/api/bot/start', { method: 'POST' });
+      const res = await fetch('/api/bot/start', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        showFeedback('success', data.message || 'Orden de inicio enviada al bot.');
+      } else {
+        showFeedback('error', data.message || 'No se pudo iniciar el bot.');
+      }
       await fetchStatus();
+      fetchLogs(0);
+    } catch (err: any) {
+      showFeedback('error', `Error de red: ${err.message}`);
     } finally {
       setLoadingAction(null);
     }
@@ -111,8 +127,17 @@ export function BotManagerView() {
   const handleStop = async () => {
     setLoadingAction('stop');
     try {
-      await fetch('/api/bot/stop', { method: 'POST' });
+      const res = await fetch('/api/bot/stop', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        showFeedback('success', data.message || 'Bot detenido.');
+      } else {
+        showFeedback('error', data.message || 'No se pudo detener el bot.');
+      }
       await fetchStatus();
+      fetchLogs(0);
+    } catch (err: any) {
+      showFeedback('error', `Error de red: ${err.message}`);
     } finally {
       setLoadingAction(null);
     }
@@ -121,8 +146,17 @@ export function BotManagerView() {
   const handleRestart = async () => {
     setLoadingAction('restart');
     try {
-      await fetch('/api/bot/restart', { method: 'POST' });
+      const res = await fetch('/api/bot/restart', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success !== false) {
+        showFeedback('success', data.message || 'Bot reiniciado con éxito.');
+      } else {
+        showFeedback('error', data.message || 'No se pudo reiniciar el bot.');
+      }
       await fetchStatus();
+      fetchLogs(0);
+    } catch (err: any) {
+      showFeedback('error', `Error de red: ${err.message}`);
     } finally {
       setLoadingAction(null);
     }
@@ -249,6 +283,22 @@ export function BotManagerView() {
             </button>
           </div>
         </div>
+
+        {/* Action Feedback Banner */}
+        {actionFeedback && (
+          <div className={`mt-4 p-3.5 rounded-xl border flex items-center gap-3 text-xs animate-in fade-in slide-in-from-top-2 ${
+            actionFeedback.type === 'success'
+              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+              : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+          }`}>
+            {actionFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+            )}
+            <div className="flex-1 font-medium">{actionFeedback.message}</div>
+          </div>
+        )}
 
         {/* Clean Reset Success Notification */}
         {cleanSuccessNotice && (
