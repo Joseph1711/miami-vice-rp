@@ -1,0 +1,6 @@
+{
+  "name": "Miami Vice RP Bot - Discord Async Fix & Diagnostics",
+  "description": "Herramienta interactiva de diagnóstico, visualización de parches y corrección del error de bucle infinito en peticiones asíncronas para el bot de Discord de Miami Vice RP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
