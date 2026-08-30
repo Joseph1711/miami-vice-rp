@@ -59,6 +59,10 @@ COGS = [
     "bot.cogs.roblox",
     "bot.cogs.updates",
     "bot.cogs.vehicles",
+    "bot.cogs.bolo",
+    "bot.cogs.cases",
+    "bot.cogs.incidents",
+    "bot.cogs.announcements",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]

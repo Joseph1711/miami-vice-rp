@@ -158,6 +158,50 @@ HELP_CATEGORIES = {
             ("/update github_config activar_auto repo", "Configurar detección automática de GitHub cada 15 min"),
         ]
     },
+    "anuncios_embed": {
+        "emoji": "🖼️",
+        "label": "Anuncios Oficiales Embed",
+        "commands": [
+            ("/anuncio modal #canal [mencion]", "Abrir editor interactivo para redactar comunicados con formato enriquecido"),
+            ("/anuncio crear #canal titulo mensaje [color] [imagen] [pie]", "Crear y publicar un anuncio embed personalizado"),
+            ("/anuncio rapido titulo mensaje [#canal]", "Publicar un comunicado embed rápido al instante"),
+        ]
+    },
+    "bolo": {
+        "emoji": "🚨",
+        "label": "B.O.L.O. (Búsqueda & Captura)",
+        "commands": [
+            ("/bolo emitir tipo identificador motivo [peligrosidad] [recompensa]", "Emitir orden oficial de captura o búsqueda"),
+            ("/bolo lista [estado] [tipo]", "Consultar órdenes BOLO activas o resueltas"),
+            ("/bolo ver codigo", "Ver ficha técnica y antecedentes de la orden BOLO"),
+            ("/bolo actualizar codigo nuevo_estado [notas]", "Actualizar estado a Capturado o Cancelado (Policía/Admin)"),
+            ("/bolo borrar codigo", "Eliminar permanentemente una orden BOLO"),
+        ]
+    },
+    "casos": {
+        "emoji": "📁",
+        "label": "Expedientes & Casos Judiciales",
+        "commands": [
+            ("/caso abrir titulo categoria descripcion [prioridad]", "Abrir nuevo expediente penal o judicial"),
+            ("/caso lista [estado] [categoria]", "Ver lista de casos abiertos y en investigación"),
+            ("/caso ver numero_caso", "Consultar expediente completo con pruebas y sospechosos"),
+            ("/caso nota_agregar numero_caso nota", "Añadir avance de investigación al diario del caso"),
+            ("/caso sospechoso_vincular numero_caso sospechoso cargos", "Imputar formalmente a un sospechoso"),
+            ("/caso evidencia_vincular numero_caso tipo descripcion [serie]", "Anexar arma, vehículo o prueba forense"),
+            ("/caso estado numero_caso nuevo_estado [veredicto]", "Actualizar fase procesal o sentencia judicial"),
+        ]
+    },
+    "incidentes": {
+        "emoji": "🚔",
+        "label": "Central 911 & Incidentes CAD",
+        "commands": [
+            ("/incidente crear tipo ubicacion descripcion [prioridad]", "Emitir llamada 911 o reporte operativo"),
+            ("/incidente lista [estado]", "Ver despachos activos y llamados de emergencia"),
+            ("/incidente ver codigo", "Consultar detalles de la alerta de despacho"),
+            ("/incidente atender codigo unidades", "Asignar patrullas y responder al llamado (10-76)"),
+            ("/incidente cerrar codigo informe_final", "Cerrar y archivar el reporte del incidente"),
+        ]
+    },
     "admin": {
         "emoji": "⚙️",
         "label": "Administración del Servidor",
@@ -225,6 +269,10 @@ class Help(commands.Cog):
         app_commands.Choice(name="🪪 Documento de Identidad (DNI)", value="dni"),
         app_commands.Choice(name="🔫 Registro Balístico de Armas", value="armas"),
         app_commands.Choice(name="🚗 Vehículos, Trailers & ATVs", value="vehiculos"),
+        app_commands.Choice(name="🚨 B.O.L.O. (Búsqueda & Captura)", value="bolo"),
+        app_commands.Choice(name="📁 Casos & Expedientes", value="casos"),
+        app_commands.Choice(name="🚔 Central 911 & Incidentes", value="incidentes"),
+        app_commands.Choice(name="🖼️ Anuncios Embed", value="anuncios_embed"),
         app_commands.Choice(name="🎮 Conexión a Roblox", value="roblox"),
         app_commands.Choice(name="🏛️ Departamentos Oficiales", value="departamentos"),
         app_commands.Choice(name="🏦 Banco & Inversiones", value="banco"),
@@ -232,7 +280,7 @@ class Help(commands.Cog):
         app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
         app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
         app_commands.Choice(name="🎫 Tickets & Soporte", value="tickets"),
-        app_commands.Choice(name="📢 Anuncios de Actualizaciones", value="actualizaciones"),
+        app_commands.Choice(name="📢 Actualizaciones Bot", value="actualizaciones"),
         app_commands.Choice(name="⚙️ Administración", value="admin"),
     ])
     async def help(self, interaction: discord.Interaction, categoria: str = None):

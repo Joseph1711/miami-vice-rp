@@ -2678,5 +2678,85 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "Transferencia Vehicular Completada",
       "embedContent": "El título de propiedad del vehículo **Remolque Plataforma Doble Eje** con placa `TRL-9302` ha sido transferido exitosamente.\n\n📤 **Antiguo Titular:** @Joshi\n📥 **Nuevo Titular:** @Carlos\n💵 **Importe de Transferencia:** `$3,500.00`\n🪪 **Nuevo DNI Registrado:** `MIA-294012`"
     }
+  },
+  {
+    "command": "/bolo emitir",
+    "category": "BOLO y Captura",
+    "cog": "bolo",
+    "description": "Emite una orden oficial de búsqueda y captura (BOLO) policial para sospechosos, autos o armas",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /bolo no encontrado",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] BOLO emitido -> Código generado: BOLO-4892 -> Alerta policial transmitida.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "18 ms",
+      "embedTitle": "🚨 [B.O.L.O. ACTIVO] — CÓDIGO BOLO-4892",
+      "embedContent": "ALERTA DE BÚSQUEDA Y CAPTURA EMITIDA POR EL CUERPO POLICIAL\n\n🏷️ **Código BOLO:** `BOLO-4892`\n🎯 **Tipo de Objetivo:** 👤 Sospechoso / Prófugo de la Justicia\n⚠️ **Nivel de Amenaza:** 🔴 EXTREMA / Extremadamente Armado y Violento\n📋 **Sujeto:** **Tony 'El Silencioso' Montana**\n⚖️ **Motivo:** Homicidio agravado y robo a joyería de Downtown\n💰 **Recompensa Ciudadana:** `$15,000.00` por información verificable\n👮 **Oficial Emisor:** @Capitán_Miller"
+    }
+  },
+  {
+    "command": "/caso abrir",
+    "category": "Casos y Expedientes",
+    "cog": "cases",
+    "description": "Abre un nuevo expediente penal o judicial con seguimiento de sospechosos, pruebas y notas de investigación",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /caso no encontrado",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Expediente radicado -> Número: CASO-2026-8491 -> Detective principal asignado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "21 ms",
+      "embedTitle": "📁 Expediente Penal Abierto — CASO-2026-8491",
+      "embedContent": "Se ha radicado oficialmente una nueva investigación criminal en el Departamento de Policía / Fiscalía.\n\n🔢 **Número de Caso:** `CASO-2026-8491`\n📑 **Categoría:** 💀 Homicidio / Asesinato\n⚡ **Prioridad:** 🔴 Urgente / Prioridad Máxima\n📌 **Título:** **Operación Muelle Sangriento**\n📝 **Resumen:** Hallazgo de indicios balísticos y vehículo calcinado en el puerto este de Miami Vice.\n🕵️ **Detective Principal:** @Detective_Croft\n📊 **Estado:** 🟡 `ABIERTO`"
+    }
+  },
+  {
+    "command": "/incidente crear",
+    "category": "Central 911 & Incidentes",
+    "cog": "incidents",
+    "description": "Genera un reporte de incidente o llamada de emergencia 911 en la central CAD de despacho policial/médico",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /incidente no encontrado",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Llamada 911 recibida -> Incidente INC-3921 despachado -> Código 3 activado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "19 ms",
+      "embedTitle": "🚨 [CAD / 911 DESPATCH] — INCIDENTE #INC-3921",
+      "embedContent": "ALERTA DE DESPACHO POLICIAL & SERVICIOS DE EMERGENCIA\n\n🔢 **Código:** `INC-3921`\n📋 **Tipo:** 💥 Disparos / Tiroteo (10-71)\n⚡ **Respuesta:** 🔴 Código 3 — EMERGENCIA MÁXIMA (10-99)\n📍 **Ubicación:** **Ocean Drive con 5th Avenue, Club Malibu**\n📝 **Detalles:** Múltiples detonaciones de arma automática reportadas por transeúntes.\n📞 **Informante:** @Ciudadano_Miami\n📊 **Estado:** 🚨 `PENDIENTE DE ASIGNACIÓN`"
+    }
+  },
+  {
+    "command": "/anuncio crear",
+    "category": "Anuncios Oficiales",
+    "cog": "announcements",
+    "description": "Crea y publica un anuncio oficial con estilo Embed personalizado, colores temáticos e imágenes",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Sin comando de anuncios enriquecidos embed",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Anuncio procesado -> Color 0x00E5FF aplicado -> Embed enviado al canal #anuncios.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "15 ms",
+      "embedTitle": "🌴 Miami Vice RP — Comunicado Oficial de Apertura",
+      "embedContent": "Nos complace anunciar la gran apertura de la nueva temporada de **Miami Vice Roleplay**.\n\n✨ **Novedades Principales:**\n• Nuevos sistemas de registro vehicular, trailers y cuatrimotos\n• Central policial CAD/911 con órdenes B.O.L.O. y expedientes penales\n• Economía refinada y banco de inversiones\n\n¡Los esperamos en las calles de Vice City!"
+    }
   }
 ];

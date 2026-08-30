@@ -622,6 +622,71 @@ CREATE TABLE IF NOT EXISTS vehicle_registries (
 );
 
 -- =====================
+-- POLICE BOLO (BE ON THE LOOKOUT)
+-- =====================
+CREATE TABLE IF NOT EXISTS police_bolos (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    bolo_code TEXT UNIQUE NOT NULL,
+    target_type TEXT NOT NULL,
+    target_name TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    danger_level TEXT DEFAULT 'media',
+    reward NUMERIC DEFAULT 0,
+    image_url TEXT,
+    status TEXT DEFAULT 'active',
+    officer_id TEXT NOT NULL,
+    officer_name TEXT,
+    resolution_notes TEXT,
+    resolved_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
+-- POLICE & JUSTICE CASES (EXPEDIENTES)
+-- =====================
+CREATE TABLE IF NOT EXISTS police_cases (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    case_number TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL,
+    priority TEXT DEFAULT 'media',
+    description TEXT NOT NULL,
+    lead_detective_id TEXT NOT NULL,
+    lead_detective_name TEXT,
+    status TEXT DEFAULT 'abierto',
+    suspects_json TEXT DEFAULT '[]',
+    evidence_json TEXT DEFAULT '[]',
+    notes_json TEXT DEFAULT '[]',
+    verdict TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
+-- POLICE INCIDENTS & 911 DISPATCH (DESPACHO DE EMERGENCIAS)
+-- =====================
+CREATE TABLE IF NOT EXISTS police_incidents (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    incident_code TEXT UNIQUE NOT NULL,
+    incident_type TEXT NOT NULL,
+    location TEXT NOT NULL,
+    description TEXT NOT NULL,
+    priority_code TEXT DEFAULT 'codigo_2',
+    caller_id TEXT,
+    caller_name TEXT,
+    assigned_units TEXT,
+    status TEXT DEFAULT 'activo',
+    resolution_report TEXT,
+    closed_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
 -- DB INITIALIZATION STATE
 -- =====================
 CREATE TABLE IF NOT EXISTS db_state (
@@ -630,6 +695,7 @@ CREATE TABLE IF NOT EXISTS db_state (
     initialized_at TIMESTAMP DEFAULT NOW(),
     table_count INTEGER DEFAULT 0
 );
+
 """
 
 def _check_tables_exist():
