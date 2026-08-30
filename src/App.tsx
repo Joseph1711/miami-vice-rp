@@ -128,7 +128,7 @@ export default function App() {
             }`}
           >
             <Database className="w-4 h-4 text-amber-400" />
-            <span>Base de Datos (38 Tablas)</span>
+            <span>Base de Datos (41 Tablas)</span>
           </button>
 
           <button

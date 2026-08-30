@@ -2298,5 +2298,245 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "🛡️ Centro de Verificación",
       "embedContent": "Estado de verificación actualizado: Revocar la verificación de un usuario (admin). Roles asignados."
     }
+  },
+  {
+    "command": "/dni solicitar",
+    "category": "Documento de Identidad (DNI)",
+    "cog": "dni",
+    "description": "Tramitar tu Documento Nacional de Identidad oficial de Miami Vice",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Formulario Modal sin tabla dni_records en base de datos -> sqlite3.OperationalError: no such table: dni_records",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\" (Bucle infinito en Discord)",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Modal de DNI completado -> INSERT INTO dni_records (dni_number=MIA-782910) -> Embed generado con éxito.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "38 ms",
+      "embedTitle": "🪪 Documento Nacional de Identidad — Miami Vice RP",
+      "embedContent": "DNI Oficial emitido exitosamente.\n• Número: **MIA-782910**\n• Estado: **Activo**\n• Fecha de Emisión: 2026-08-29"
+    }
+  },
+  {
+    "command": "/dni ver",
+    "category": "Documento de Identidad (DNI)",
+    "cog": "dni",
+    "description": "Ver tu Documento Nacional de Identidad oficial o el de otro ciudadano",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Consulta SQL a dni_records fallida sin binding de parámetros",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] SELECT * FROM dni_records WHERE discord_id=$1 -> Registro encontrado en 18ms.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "22 ms",
+      "embedTitle": "🪪 DNI de Ciudadano — Joseph Vance",
+      "embedContent": "• Número: **MIA-349821**\n• Ocupación: Detective Privado\n• Nacionalidad: Estadounidense\n• Estado: ✅ Válido"
+    }
+  },
+  {
+    "command": "/dni buscar_numero",
+    "category": "Documento de Identidad (DNI)",
+    "cog": "dni",
+    "description": "Buscar el titular de un DNI mediante su código oficial MIA-XXXXXX",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción no capturada al parsear el número de DNI",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Búsqueda por índice dni_number en dni_records completada en 12ms.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "16 ms",
+      "embedTitle": "🔍 Consulta de Registro Civil — MIA-349821",
+      "embedContent": "Ciudadano identificado: **Joseph Vance**\nDiscord ID: `434387223748`\nEmitido el: 2026-08-20"
+    }
+  },
+  {
+    "command": "/armas registrar",
+    "category": "Balística y Armamento",
+    "cog": "weapons",
+    "description": "Registrar un arma de fuego en el sistema balístico de Florida",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Intento de inserción en tabla inexistente weapon_registries",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] INSERT INTO weapon_registries (serial=MV-WPN-992014-FL) -> Registro balístico creado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "35 ms",
+      "embedTitle": "🔫 Registro Balístico Oficial — Departamento de Justicia",
+      "embedContent": "Arma registrada con éxito.\n• Serial Balístico: **MV-WPN-992014-FL**\n• Modelo: Glock 19 (9mm)\n• Estado de Licencia: Activa"
+    }
+  },
+  {
+    "command": "/armas mis_armas",
+    "category": "Balística y Armamento",
+    "cog": "weapons",
+    "description": "Consultar tu inventario de armas con sus números de serie y estado legal",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Bindings mismatch al consultar licencias de armas del usuario",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] SELECT * FROM weapon_registries WHERE discord_id=$1 -> 2 armas listadas.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "20 ms",
+      "embedTitle": "🔫 Licencias de Armas — Porte Legal",
+      "embedContent": "1. **Glock 19** (`MV-WPN-992014-FL`) — 9mm [✅ Legal]\n2. **Remington 870** (`MV-WPN-108472-FL`) — 12 Gauge [✅ Legal]"
+    }
+  },
+  {
+    "command": "/roblox vincular",
+    "category": "Integración Roblox",
+    "cog": "roblox",
+    "description": "Vincular tu cuenta oficial de Roblox mediante username con avatar 3D",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Fallo de conexión con la API de Roblox sin timeout seguro",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Roblox API users.roblox.com/v1/users/get-by-username resuelto en 120ms -> UPDATE users SET roblox_id=$1.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "145 ms",
+      "embedTitle": "🎮 Cuenta de Roblox Vinculada",
+      "embedContent": "Usuario de Roblox: **OfficerVance** (ID: `1849201`)\nCuenta sincronizada con tu perfil de ciudadano en Miami Vice RP."
+    }
+  },
+  {
+    "command": "/roblox perfil",
+    "category": "Integración Roblox",
+    "cog": "roblox",
+    "description": "Ver la tarjeta de perfil de Roblox con render del avatar y estadísticas",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Excepción de conexión a thumbnails.roblox.com no capturada",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Avatar render thumbnail obtenido -> Embed con thumbnail y datos IC generado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "110 ms",
+      "embedTitle": "🎮 Perfil de Roblox — OfficerVance",
+      "embedContent": "• Username: OfficerVance\n• Rango en Grupo: Detective Lead\n• Avatar Headshot: Render HD cargado"
+    }
+  },
+  {
+    "command": "/trabajar",
+    "category": "Economía y Trabajos",
+    "cog": "economy",
+    "description": "Ejecutar turno de trabajo con envío de reporte/evidencias para revisión administrativa",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Inserción en work_submissions fallaba por ausencia de tabla",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Modal de trabajo recibido -> INSERT INTO work_submissions -> Notificación enviada al canal de logs.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "42 ms",
+      "embedTitle": "💼 Reporte de Turno Laboral Registrado",
+      "embedContent": "Has enviado tu evidencia de trabajo como **Conductor de Entrega**.\nRecompensa estimada: **$3,500** (en revisión por administración)."
+    }
+  },
+  {
+    "command": "/departamento postular",
+    "category": "Postulaciones y Departamentos",
+    "cog": "departments",
+    "description": "Enviar postulación formal a un departamento oficial por su acrónimo (ej: MPD, MDFR, FHP)",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Acrónimo no validado y fallo al enviar a canal de postulaciones",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Departamento MPD verificado -> Modal interactivo de postulación presentado -> Solicitud registrada.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "30 ms",
+      "embedTitle": "📋 Postulación a Departamento — MPD",
+      "embedContent": "Tu postulación para unirte a **Miami Police Department [MPD]** ha sido enviada al canal de reclutamiento para su revisión."
+    }
+  },
+  {
+    "command": "/departamento mis_postulaciones",
+    "category": "Postulaciones y Departamentos",
+    "cog": "departments",
+    "description": "Consultar el estado de tus solicitudes y postulaciones activas a departamentos",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Consulta a applications sin binding de guild_id",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] SELECT * FROM applications WHERE discord_id=$1 -> Estado 'pending' retornado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "18 ms",
+      "embedTitle": "📑 Mis Postulaciones Departamentales",
+      "embedContent": "• **MPD (Miami Police Department)** — Estado: 🟡 En Revisión\n• Enviada hace: 2 horas"
+    }
+  },
+  {
+    "command": "/admin configuracion rol_admin",
+    "category": "Administración del Servidor",
+    "cog": "admin",
+    "description": "Configurar el rol de Discord con permisos administrativos para el bot",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] near ',': syntax error en UPDATE guild_config SET admin_role_id=",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] UPDATE guild_config SET admin_role_id=$1 WHERE guild_id=$2 -> Configuración guardada en 15ms.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "20 ms",
+      "embedTitle": "⚙️ Rol de Administrador Configurado",
+      "embedContent": "Los permisos administrativos han sido asignados al rol seleccionado."
+    }
+  },
+  {
+    "command": "/admin configuracion canal_postulaciones",
+    "category": "Administración del Servidor",
+    "cog": "admin",
+    "description": "Configurar el canal de recepción de postulaciones y solicitudes departamentales",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] 'Command' object is not callable o syntax error en consulta SQL",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Método interno _handle_canal_postulaciones ejecutado -> Sincronizado guild_config y application_config.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "25 ms",
+      "embedTitle": "⚙️ Canal de Postulaciones Configurado",
+      "embedContent": "Las solicitudes de ingreso a departamentos se enviarán al canal designado."
+    }
   }
 ];

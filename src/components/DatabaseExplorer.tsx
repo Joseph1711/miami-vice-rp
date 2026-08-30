@@ -62,13 +62,13 @@ interface ColumnMeta {
 
 const CATEGORIES = [
   { id: 'all', label: 'Todas las Tablas', icon: Database, color: 'text-cyan-400' },
-  { id: 'users_config', label: 'Usuarios & Config', icon: Users, color: 'text-blue-400' },
-  { id: 'economy_banking', label: 'Economía & Banco', icon: Coins, color: 'text-emerald-400' },
+  { id: 'users_config', label: 'Usuarios, DNI & Config', icon: Users, color: 'text-blue-400' },
+  { id: 'economy_banking', label: 'Economía & Trabajos', icon: Coins, color: 'text-emerald-400' },
   { id: 'companies_properties', label: 'Empresas & Bienes', icon: Building2, color: 'text-indigo-400' },
   { id: 'departments_fleet', label: 'Departamentos & Flota', icon: Briefcase, color: 'text-amber-400' },
-  { id: 'crime_drugs', label: 'Crimen & Drogas', icon: Skull, color: 'text-rose-400' },
+  { id: 'crime_drugs', label: 'Armas, Crimen & Drogas', icon: Skull, color: 'text-rose-400' },
   { id: 'market_inventory', label: 'Mercado & Tienda', icon: ShoppingBag, color: 'text-purple-400' },
-  { id: 'tickets_contracts', label: 'Soporte & Facciones', icon: Ticket, color: 'text-pink-400' },
+  { id: 'tickets_contracts', label: 'Postulaciones & Soporte', icon: Ticket, color: 'text-pink-400' },
 ];
 
 export function DatabaseExplorer() {
@@ -766,18 +766,21 @@ export function DatabaseExplorer() {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
                 <span className="text-[11px] text-slate-500 font-sans shrink-0">Consultas rápidas:</span>
                 {[
+                  `SELECT * FROM dni_records LIMIT 25;`,
+                  `SELECT * FROM weapon_registries LIMIT 25;`,
+                  `SELECT * FROM work_submissions LIMIT 25;`,
+                  `SELECT * FROM applications LIMIT 25;`,
                   `SELECT * FROM users LIMIT 25;`,
-                  `SELECT * FROM items LIMIT 25;`,
                   `SELECT * FROM departments LIMIT 25;`,
-                  `SELECT * FROM transactions ORDER BY created_at DESC LIMIT 25;`,
-                  `PRAGMA table_info(users);`
+                  `SELECT * FROM items LIMIT 25;`,
+                  `PRAGMA table_info(dni_records);`
                 ].map((q, qIdx) => (
                   <button
                     key={`q-preset-${qIdx}`}
                     onClick={() => setSqlQuery(q)}
                     className="px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 text-[10px] whitespace-nowrap cursor-pointer transition-colors"
                   >
-                    {q.slice(0, 32)}...
+                    {q.slice(0, 34)}...
                   </button>
                 ))}
               </div>
