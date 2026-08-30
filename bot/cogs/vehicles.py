@@ -33,8 +33,16 @@ REGISTRATION_FEE = 500
 class RegisterVehicleModal(discord.ui.Modal):
     def __init__(self, vehicle_type: str = "auto"):
         v_meta = VEHICLE_TYPE_META.get(vehicle_type, VEHICLE_TYPE_META["auto"])
-        super().__init__(title=f"Registro Oficial: {v_meta['label'][:35]}")
+        super().__init__(title=f"Registro: {v_meta['label'][:25]}")
         self.vehicle_type = vehicle_type
+
+        self.plate_input = discord.ui.TextInput(
+            label="Placa / Matrícula Deseada",
+            placeholder="Ej: MIA-1234, B-791, 8XYZ99, SPEED-01",
+            max_length=16,
+            min_length=2,
+            required=True
+        )
 
         self.brand_model = discord.ui.TextInput(
             label="Marca y Modelo del Vehículo/Trailer/ATV",
@@ -58,6 +66,7 @@ class RegisterVehicleModal(discord.ui.Modal):
             required=False
         )
 
+        self.add_item(self.plate_input)
         self.add_item(self.brand_model)
         self.add_item(self.color)
         self.add_item(self.notes)
@@ -80,7 +89,27 @@ class RegisterVehicleModal(discord.ui.Modal):
                 ), ephemeral=True)
                 return
 
-            # 2. Comprobar balance económico para arancel de matriculación
+            # 2. Validar disponibilidad de la placa ingresada por el usuario
+            plate = self.plate_input.value.strip().upper()
+            if len(plate) < 2 or len(plate) > 16:
+                await interaction.followup.send(embed=error_embed(
+                    "Placa Inválida",
+                    "La placa debe tener entre 2 y 16 caracteres alfanuméricos."
+                ), ephemeral=True)
+                return
+
+            existing_plate = await aexecute(
+                "SELECT id FROM vehicle_registries WHERE guild_id=$1 AND UPPER(plate)=$2 AND status != 'scrapped'",
+                (gid, plate), fetch="one"
+            )
+            if existing_plate:
+                await interaction.followup.send(embed=error_embed(
+                    "Placa Ya Registrada",
+                    f"La placa **{plate}** ya está asignada a otro vehículo en la ciudad. Por favor elige una matrícula diferente."
+                ), ephemeral=True)
+                return
+
+            # 3. Comprobar balance económico para arancel de matriculación
             user_data = await async_get_or_create_user(uid, gid, interaction.user.name, interaction.user.display_name)
             cash = float(user_data.get("cash", 0))
             bank = float(user_data.get("bank", 0))
@@ -101,8 +130,7 @@ class RegisterVehicleModal(discord.ui.Modal):
                 await aexecute("UPDATE users SET bank = bank - $1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3",
                                (REGISTRATION_FEE, uid, gid))
 
-            # 3. Generar Placa y VIN únicos
-            plate = await generate_unique_vehicle_plate(gid, self.vehicle_type)
+            # 4. Generar VIN único y IDs
             vin = await generate_unique_vin(gid, self.vehicle_type)
             reg_id = generate_id()
 
@@ -110,7 +138,7 @@ class RegisterVehicleModal(discord.ui.Modal):
             v_color = self.color.value.strip()
             v_notes = self.notes.value.strip() if self.notes.value else None
 
-            # 4. Guardar registro en base de datos
+            # 5. Guardar registro en base de datos
             await aexecute(
                 """INSERT INTO vehicle_registries 
                    (id, guild_id, discord_id, dni_id, dni_number, vehicle_type, brand_model, color, plate, vin_number, status, registration_fee, insurance_status, notes, registered_at, created_at, updated_at)
@@ -118,7 +146,7 @@ class RegisterVehicleModal(discord.ui.Modal):
                 (reg_id, gid, uid, dni.get("id"), dni.get("dni_number"), self.vehicle_type, b_model, v_color, plate, vin, REGISTRATION_FEE, v_notes)
             )
 
-            # 5. Generar Tarjeta de Circulación oficial
+            # 6. Generar Tarjeta de Circulación oficial
             type_info = VEHICLE_TYPE_META.get(self.vehicle_type, VEHICLE_TYPE_META["auto"])
             citizen_name = f"{dni.get('first_name', '')} {dni.get('last_name', '')}".strip() or interaction.user.display_name
             roblox_tag = dni.get("roblox_username") or user_data.get("roblox_username")
@@ -173,10 +201,11 @@ class Vehicles(commands.Cog):
     # ==========================================
     # COMANDO 1: /vehiculo registrar
     # ==========================================
-    @vehicle_group.command(name="registrar", description="Registra y matricula un automóvil, trailer, ATV o cuatrimoto a tu nombre")
+    @vehicle_group.command(name="registrar", description="Registra y matricula un automóvil, trailer, ATV o cuatrimoto con tu propia placa")
     @app_commands.describe(
         tipo="Categoría del vehículo a matricular",
-        marca_modelo="Marca y modelo específico (opcional, abre modal si se omite)",
+        placa="Placa o matrícula que deseas asignar al vehículo (opcional, abre modal si se omite)",
+        marca_modelo="Marca y modelo específico (opcional)",
         color="Color del vehículo (opcional)",
         detalles="Detalles o equipamiento adicional (opcional)"
     )
@@ -194,12 +223,13 @@ class Vehicles(commands.Cog):
         self,
         interaction: discord.Interaction,
         tipo: str,
+        placa: str = None,
         marca_modelo: str = None,
         color: str = None,
         detalles: str = None
     ):
-        # Si faltan campos, abrir Modal interactivo
-        if not marca_modelo or not color:
+        # Si faltan campos, abrir Modal interactivo con campo de placa
+        if not placa or not marca_modelo or not color:
             modal = RegisterVehicleModal(vehicle_type=tipo)
             await interaction.response.send_modal(modal)
             return
@@ -221,7 +251,27 @@ class Vehicles(commands.Cog):
                 ), ephemeral=True)
                 return
 
-            # 2. Comprobar fondos
+            # 2. Validar placa ingresada
+            clean_plate = placa.strip().upper()
+            if len(clean_plate) < 2 or len(clean_plate) > 16:
+                await interaction.followup.send(embed=error_embed(
+                    "Placa Inválida",
+                    "La placa debe tener entre 2 y 16 caracteres alfanuméricos."
+                ), ephemeral=True)
+                return
+
+            existing_plate = await aexecute(
+                "SELECT id FROM vehicle_registries WHERE guild_id=$1 AND UPPER(plate)=$2 AND status != 'scrapped'",
+                (gid, clean_plate), fetch="one"
+            )
+            if existing_plate:
+                await interaction.followup.send(embed=error_embed(
+                    "Placa Ya Registrada",
+                    f"La placa **{clean_plate}** ya está asignada a otro vehículo en la ciudad. Por favor elige una matrícula diferente."
+                ), ephemeral=True)
+                return
+
+            # 3. Comprobar fondos
             user_data = await async_get_or_create_user(uid, gid, interaction.user.name, interaction.user.display_name)
             cash = float(user_data.get("cash", 0))
             bank = float(user_data.get("bank", 0))
@@ -241,8 +291,7 @@ class Vehicles(commands.Cog):
                 await aexecute("UPDATE users SET bank = bank - $1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3",
                                (REGISTRATION_FEE, uid, gid))
 
-            # 3. Generar Placa y VIN
-            plate = await generate_unique_vehicle_plate(gid, tipo)
+            # 4. Generar VIN y reg_id
             vin = await generate_unique_vin(gid, tipo)
             reg_id = generate_id()
 
@@ -250,15 +299,15 @@ class Vehicles(commands.Cog):
             v_color = color.strip()
             v_notes = detalles.strip() if detalles else None
 
-            # 4. Inserción en DB
+            # 5. Inserción en DB con la placa personalizada
             await aexecute(
                 """INSERT INTO vehicle_registries 
                    (id, guild_id, discord_id, dni_id, dni_number, vehicle_type, brand_model, color, plate, vin_number, status, registration_fee, insurance_status, notes, registered_at, created_at, updated_at)
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'active', $11, 'basic', $12, NOW(), NOW(), NOW())""",
-                (reg_id, gid, uid, dni.get("id"), dni.get("dni_number"), tipo, b_model, v_color, plate, vin, REGISTRATION_FEE, v_notes)
+                (reg_id, gid, uid, dni.get("id"), dni.get("dni_number"), tipo, b_model, v_color, clean_plate, vin, REGISTRATION_FEE, v_notes)
             )
 
-            # 5. Embed
+            # 6. Embed
             type_info = VEHICLE_TYPE_META.get(tipo, VEHICLE_TYPE_META["auto"])
             citizen_name = f"{dni.get('first_name', '')} {dni.get('last_name', '')}".strip() or interaction.user.display_name
             roblox_tag = dni.get("roblox_username") or user_data.get("roblox_username")
@@ -272,7 +321,7 @@ class Vehicles(commands.Cog):
                 color=COLOR_PRIMARY
             )
 
-            embed.add_field(name="🏷️ Placa Oficial", value=f"```fix\n{plate}\n```", inline=True)
+            embed.add_field(name="🏷️ Placa Oficial", value=f"```fix\n{clean_plate}\n```", inline=True)
             embed.add_field(name="🔢 Número de Chasis (VIN)", value=f"`{vin}`", inline=True)
             embed.add_field(name="🚦 Tipo de Unidad", value=f"{type_info['emoji']} {type_info['label']}", inline=True)
 

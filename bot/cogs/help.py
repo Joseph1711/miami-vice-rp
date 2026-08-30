@@ -47,7 +47,7 @@ HELP_CATEGORIES = {
         "emoji": "🚗",
         "label": "Vehículos, Remolques & ATVs",
         "commands": [
-            ("/vehiculo registrar tipo [marca_modelo] [color]", "Matricular automóvil, camioneta, trailer, cuatrimoto o lancha"),
+            ("/vehiculo registrar tipo [placa] [marca_modelo] [color]", "Matricular vehículo, trailer o cuatrimoto con tu placa personalizada"),
             ("/vehiculo mis_vehiculos [filtro_tipo]", "Consultar tu garage de vehículos, remolques y ATVs registrados"),
             ("/vehiculo ver placa_o_vin", "Ver tarjeta de circulación, titular y estado legal de una unidad"),
             ("/vehiculo buscar @usuario", "Consultar el parque automotor registrado de un ciudadano"),
