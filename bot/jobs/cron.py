@@ -217,97 +217,89 @@ def setup_jobs(bot):
             logger.error(f"Vehicle repair job error: {e}")
 
     @scheduler.scheduled_job("interval", minutes=15)
-    async def check_github_updates():
+    async def check_github_updates_job():
         try:
             from bot.services.updates import (
                 fetch_github_commits,
-                extract_real_changes_from_commits,
+                is_commit_already_published,
+                record_published_update,
                 build_announcement_text,
-                build_announcement_embed,
-                async_save_update_history,
-                async_save_updates_config,
-                async_is_update_duplicate,
                 DEFAULT_REPO
             )
-
-            # Buscar servidores con canal configurado y auto_github_enabled=True
+            
             configs = await aexecute(
-                """SELECT * FROM bot_updates_config 
-                   WHERE channel_id IS NOT NULL AND auto_github_enabled=true""",
+                "SELECT * FROM update_config WHERE auto_announce=TRUE AND channel_id IS NOT NULL",
                 fetch="all"
             ) or []
-
+            
             if not configs:
                 return
 
-            for cfg in configs:
-                gid = cfg["guild_id"]
-                repo_name = cfg.get("github_repo") or DEFAULT_REPO
-                last_sha = cfg.get("last_commit_sha")
-                channel_id = cfg.get("channel_id")
+            # Group by repo to minimize GitHub API calls
+            repo_cache = {}
+            for conf in configs:
+                gid = conf["guild_id"]
+                cid = conf["channel_id"]
+                repo = conf.get("github_repo") or DEFAULT_REPO
 
-                commits = await fetch_github_commits(repo=repo_name, limit=5)
+                if repo not in repo_cache:
+                    repo_cache[repo] = await fetch_github_commits(repo, limit=3)
+                
+                commits = repo_cache.get(repo) or []
                 if not commits:
                     continue
 
-                real_changes, latest_sha, commit_date = extract_real_changes_from_commits(commits)
-                if not latest_sha or latest_sha == last_sha:
+                latest_commit = commits[0]
+                latest_sha = latest_commit["sha"]
+                short_sha = latest_commit["short_sha"]
+
+                # Check if this commit was already published in this guild
+                if await is_commit_already_published(gid, latest_sha) or await is_commit_already_published(gid, short_sha):
                     continue
 
-                # Si es la primera vez que se configura y no había last_sha, inicializarlo para no spammear
-                if not last_sha:
-                    await async_save_updates_config(gid, last_commit_sha=latest_sha)
-                    logger.info(f"[Updates] SHA inicial registrado para guild {gid}: {latest_sha[:7]}")
+                # Also avoid posting if last_commit_sha is already set to this
+                if conf.get("last_commit_sha") == latest_sha:
                     continue
 
-                # Comprobar duplicados
-                if await async_is_update_duplicate(gid, commit_sha=latest_sha):
-                    await async_save_updates_config(gid, last_commit_sha=latest_sha)
-                    continue
-
-                short_sha = latest_sha[:7]
-                auto_ver = f"v1.{len(commits)}.{short_sha}"
-                date_str = commit_date or datetime.datetime.utcnow().strftime("%d/%m/%Y")
-                changes_text = "\n".join([f"• {c}" for c in real_changes])
-
-                # Obtener canal
-                guild = bot.get_guild(int(gid))
-                if not guild:
-                    continue
-
-                channel = guild.get_channel(int(channel_id))
+                channel = bot.get_channel(int(cid))
                 if not channel:
                     try:
-                        channel = await bot.fetch_channel(int(channel_id))
+                        channel = await bot.fetch_channel(int(cid))
                     except Exception:
                         continue
 
                 if not channel:
                     continue
 
-                # Publicar anuncio en el canal con personalidad del bot
-                full_text = build_announcement_text(auto_ver, changes_text, date_str)
-                sent_msg = await channel.send(content=full_text)
+                version_name = f"Build {short_sha}"
+                changes_list = [f"• {c['clean_message']}" for c in commits]
 
-                # Registrar en historial
-                await async_save_update_history(
-                    guild_id=gid,
-                    version=auto_ver,
-                    title=f"Actualización Automática {auto_ver}",
-                    raw_message=full_text,
-                    changes=changes_text,
-                    source="github_auto",
-                    commit_sha=latest_sha,
-                    channel_id=str(channel.id),
-                    message_id=str(sent_msg.id),
-                    published_by="GITHUB_WATCHDOG"
+                announcement = build_announcement_text(
+                    version=version_name,
+                    changes=changes_list,
+                    description="Actualización detectada automáticamente desde GitHub",
+                    commit_sha=latest_sha
                 )
 
-                # Actualizar SHA
-                await async_save_updates_config(gid, last_commit_sha=latest_sha)
-                logger.info(f"[Updates] Anuncio automático publicado en {channel.name} ({auto_ver})")
+                mention_text = f"<@&{conf['mention_role_id']}> 🚨 **NUEVA ACTUALIZACIÓN**" if conf.get("mention_role_id") else None
+
+                sent_msg = await channel.send(content=mention_text, embed=announcement["embed"])
+
+                await record_published_update(
+                    guild_id=gid,
+                    version=version_name,
+                    title=announcement["title"],
+                    changes=changes_list,
+                    description="Detección automática GitHub",
+                    commit_sha=latest_sha,
+                    source="github",
+                    published_by="GitHub Automation",
+                    channel_id=str(channel.id),
+                    message_id=str(sent_msg.id)
+                )
+                logger.info(f"[Updates] Auto-anuncio de commit {short_sha} publicado en guild {gid} (canal {cid})")
         except Exception as e:
-            logger.error(f"GitHub updates cron job error: {e}")
+            logger.error(f"[Updates] Error en job de detección de GitHub: {e}", exc_info=True)
 
     scheduler.start()
     logger.info("Cron jobs started")

@@ -1,32 +1,34 @@
-"""Prueba la conexión directa a Supabase PostgreSQL del bot.
+"""Prueba la base SQLite local del bot.
 
 Ejecutar con: python test_database.py
 """
-from bot.db import DATABASE_URL, check_connection, execute, connection_label
+from bot.db import DB_PATH, check_connection, execute
 
 
 def main():
-    print("=" * 60)
-    print("  MIAMI VICE — PRUEBA DE CONEXIÓN A SUPABASE POSTGRESQL")
-    print("=" * 60)
-    print(f"\n[INFO] Backend: {connection_label()}")
+    print("=" * 55)
+    print("  MIAMI VICE — PRUEBA DE BASE DE DATOS LOCAL")
+    print("=" * 55)
+    print(f"\n[INFO] Archivo SQLite: {DB_PATH}")
 
+    from scripts.init_db import init_db
+    init_db()
     result = check_connection()
     if not result["ok"]:
-        print(f"\n[ERROR] No se pudo conectar a Supabase: {result['error']}")
+        print(f"\n[ERROR] No se pudo abrir SQLite: {result['error']}")
         raise SystemExit(1)
 
-    print("[OK] Conexión SSL/TLS a Supabase PostgreSQL establecida correctamente")
+    print("[OK] Conexión SQLite establecida correctamente")
     print(f"[OK] SELECT 1 → {execute('SELECT 1 AS resultado', fetch='one')}")
     tables = execute(
-        "SELECT COUNT(*) AS total FROM information_schema.tables WHERE table_schema = 'public'",
+        "SELECT COUNT(*) AS total FROM sqlite_master "
+        "WHERE type='table' AND name NOT LIKE 'sqlite_%'",
         fetch="one",
     )
-    total_tables = tables["total"] if tables else 0
-    print(f"[INFO] Tablas públicas en Supabase: {total_tables}")
-    print("\n" + "=" * 60)
-    print("  RESULTADO: SUPABASE POSTGRESQL OPERATIVO Y CONECTADO ✓")
-    print("=" * 60)
+    print(f"[INFO] Tablas del bot: {tables['total']}")
+    print("\n" + "=" * 55)
+    print("  RESULTADO: BASE LOCAL OPERATIVA ✓")
+    print("=" * 55)
 
 
 if __name__ == "__main__":

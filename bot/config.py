@@ -1,11 +1,9 @@
 import os
-from dataclasses import dataclass
 
 DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN", "")
 DISCORD_CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-KEEP_ALIVE_PORT = int(os.environ.get("PORT", "3000"))
+KEEP_ALIVE_PORT = 3000
 
 INVESTMENT_TYPES = {
     "conservative": {"label": "Conservador", "rate": 5,  "days": 3, "emoji": "🟢"},
@@ -29,20 +27,3 @@ MAX_ACTIVE_LOANS = 3
 MAX_LOAN_TOTAL = 100_000
 COMPANY_CREATION_COST = 5_000
 PROPERTY_SELL_RETURN = 0.75
-
-
-@dataclass
-class Settings:
-    discord_token: str = DISCORD_TOKEN
-    discord_client_id: str = DISCORD_CLIENT_ID
-    database_url: str = DATABASE_URL
-    port: int = KEEP_ALIVE_PORT
-
-
-def get_settings() -> Settings:
-    return Settings(
-        discord_token=os.environ.get("DISCORD_TOKEN", ""),
-        discord_client_id=os.environ.get("DISCORD_CLIENT_ID", ""),
-        database_url=os.environ.get("DATABASE_URL", ""),
-        port=int(os.environ.get("PORT", "3000")),
-    )

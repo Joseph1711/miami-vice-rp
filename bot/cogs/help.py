@@ -24,26 +24,12 @@ HELP_CATEGORIES = {
     },
     "dni": {
         "emoji": "🪪",
-        "label": "Documento de Identidad & Multiroles",
+        "label": "Documento de Identidad (DNI)",
         "commands": [
-            ("/dni crear", "Tramitar tu DNI IC con foto de perfil de Roblox sincronizada (hasta 5 personajes)"),
-            ("/dni mis_personajes", "Ver tus hasta 5 personajes registrados y alternar tu personaje activo"),
-            ("/dni ver [usuario] [numero_dni]", "Ver el documento de identidad oficial con avatar de Roblox"),
+            ("/dni crear", "Tramitar tu DNI con datos de tu personaje IC y generar ID único"),
+            ("/dni ver [usuario]", "Ver el documento de identidad oficial de un ciudadano"),
             ("/dni buscar numero_dni", "Buscar a un ciudadano por su número de DNI único (ej: MIA-123456)"),
             ("/dni revocar @usuario motivo", "Revocar o anular el DNI de un ciudadano (Admin/Policía)"),
-        ]
-    },
-    "policia": {
-        "emoji": "👮",
-        "label": "Policía & Seguridad Pública",
-        "commands": [
-            ("/policia arrestar @ciudadano motivo [tiempo] [fianza]", "Arrestar y procesar judicialmente a un infractor"),
-            ("/policia multar @ciudadano monto motivo", "Emitir y cobrar una multa/infracción a un ciudadano"),
-            ("/policia antecedentes @ciudadano", "Consultar el historial delictivo, multas y arrestos de un usuario"),
-            ("/policia mis_multas", "Consultar tus multas pendientes, historial y fianzas fijadas"),
-            ("/policia pagar_multa [folio]", "Pagar y liquidar una multa pendiente (efectivo o banco)"),
-            ("/policia pagar_fianza [ciudadano]", "Pagar la fianza judicial de un detenido para otorgarle libertad"),
-            ("/policia configurar_roles roles", "Configurar roles de Discord autorizados para usar comandos policiales (Admin)"),
         ]
     },
     "armas": {
@@ -55,20 +41,6 @@ HELP_CATEGORIES = {
             ("/arma ver numero_serie", "Consultar el registro balístico y titular de un arma"),
             ("/arma transferir numero_serie @usuario", "Transferir la posesión legal de un arma a otro ciudadano"),
             ("/arma incautar numero_serie motivo", "Incautar un arma en operativo policial (Admin/Policía)"),
-        ]
-    },
-    "vehiculos": {
-        "emoji": "🚗",
-        "label": "Vehículos, Remolques & ATVs",
-        "commands": [
-            ("/vehiculo registrar tipo [placa] [marca_modelo] [color]", "Matricular vehículo, trailer o cuatrimoto con tu placa personalizada"),
-            ("/vehiculo mis_vehiculos [filtro_tipo]", "Consultar tu garage de vehículos, remolques y ATVs registrados"),
-            ("/vehiculo ver placa_o_vin", "Ver tarjeta de circulación, titular y estado legal de una unidad"),
-            ("/vehiculo buscar @usuario", "Consultar el parque automotor registrado de un ciudadano"),
-            ("/vehiculo transferir placa @usuario [precio]", "Transferir legalmente la titularidad de un vehículo a otro ciudadano"),
-            ("/vehiculo reportar placa estado", "Reportar vehículo como robado o recuperado ante la policía"),
-            ("/vehiculo incautar placa motivo [multa]", "Incautar vehículo al corralón municipal (Admin/Policía)"),
-            ("/vehiculo liberar placa", "Pagar multa de corralón y recuperar circulación de la unidad"),
         ]
     },
     "roblox": {
@@ -152,74 +124,23 @@ HELP_CATEGORIES = {
     },
     "tickets": {
         "emoji": "🎫",
-        "label": "Tickets & Verificación",
+        "label": "Tickets & Soporte",
         "commands": [
-            ("/ticket panel [canal] [categoria] [rol]", "Publicar panel interactivo en el canal y categoría seleccionados"),
-            ("/ticket abrir", "Abrir un ticket llenando el formulario/modal interactivo obligatorio"),
-            ("/ticket cerrar", "Cerrar el ticket actual"),
-            ("/verificar panel [canal] [roles_otorgar] [roles_retirar]", "Publicar panel de verificación multi-rol con conexión a Roblox"),
-            ("/verificar configurar [roles_otorgar] [roles_retirar]", "Configurar uno o múltiples roles a otorgar y retirar"),
-            ("/verificar agregar_rol @rol", "Añadir un rol adicional a la lista de roles otorgados"),
-            ("/verificar remover_rol @rol", "Quitar un rol de la lista de verificación"),
-            ("/verificar ver_config", "Ver la lista actual de roles y canales de verificación"),
-            ("/verificar estado [usuario]", "Consultar estado de verificación y Roblox vinculado"),
+            ("/ticket abrir", "Abrir ticket de soporte privado"),
+            ("/ticket cerrar", "Cerrar ticket actual"),
+            ("/verificar estado", "Ver tu estado de verificación"),
         ]
     },
-    "actualizaciones": {
+    "updates": {
         "emoji": "📢",
-        "label": "Anuncios de Actualizaciones",
+        "label": "Actualizaciones & Anuncios",
         "commands": [
-            ("/update canal #canal", "Configurar canal oficial donde se publicarán los anuncios"),
-            ("/update configurar [version] [cambios]", "Configurar versión y lista de cambios reales a anunciar"),
-            ("/update preview", "Ver el anuncio con la personalidad sarcástica y auténtica del bot"),
-            ("/update publicar [canal] [forzar]", "Publicar el anuncio en el canal configurado"),
-            ("/update historial [limite]", "Consultar el historial de actualizaciones publicadas"),
-            ("/update github_check [repo] [publicar]", "Detectar commits reales de GitHub y generar anuncio"),
-            ("/update github_config activar_auto repo", "Configurar detección automática de GitHub cada 15 min"),
-        ]
-    },
-    "anuncios_embed": {
-        "emoji": "🖼️",
-        "label": "Anuncios Oficiales Embed",
-        "commands": [
-            ("/anuncio modal #canal [mencion]", "Abrir editor interactivo para redactar comunicados con formato enriquecido"),
-            ("/anuncio crear #canal titulo mensaje [color] [imagen] [pie]", "Crear y publicar un anuncio embed personalizado"),
-            ("/anuncio rapido titulo mensaje [#canal]", "Publicar un comunicado embed rápido al instante"),
-        ]
-    },
-    "bolo": {
-        "emoji": "🚨",
-        "label": "B.O.L.O. (Búsqueda & Captura)",
-        "commands": [
-            ("/bolo emitir tipo identificador motivo [peligrosidad] [recompensa]", "Emitir orden oficial de captura o búsqueda"),
-            ("/bolo lista [estado] [tipo]", "Consultar órdenes BOLO activas o resueltas"),
-            ("/bolo ver codigo", "Ver ficha técnica y antecedentes de la orden BOLO"),
-            ("/bolo actualizar codigo nuevo_estado [notas]", "Actualizar estado a Capturado o Cancelado (Policía/Admin)"),
-            ("/bolo borrar codigo", "Eliminar permanentemente una orden BOLO"),
-        ]
-    },
-    "casos": {
-        "emoji": "📁",
-        "label": "Expedientes & Casos Judiciales",
-        "commands": [
-            ("/caso abrir titulo categoria descripcion [prioridad]", "Abrir nuevo expediente penal o judicial"),
-            ("/caso lista [estado] [categoria]", "Ver lista de casos abiertos y en investigación"),
-            ("/caso ver numero_caso", "Consultar expediente completo con pruebas y sospechosos"),
-            ("/caso nota_agregar numero_caso nota", "Añadir avance de investigación al diario del caso"),
-            ("/caso sospechoso_vincular numero_caso sospechoso cargos", "Imputar formalmente a un sospechoso"),
-            ("/caso evidencia_vincular numero_caso tipo descripcion [serie]", "Anexar arma, vehículo o prueba forense"),
-            ("/caso estado numero_caso nuevo_estado [veredicto]", "Actualizar fase procesal o sentencia judicial"),
-        ]
-    },
-    "incidentes": {
-        "emoji": "🚔",
-        "label": "Central 911 & Incidentes CAD",
-        "commands": [
-            ("/incidente crear tipo ubicacion descripcion [prioridad]", "Emitir llamada 911 o reporte operativo"),
-            ("/incidente lista [estado]", "Ver despachos activos y llamados de emergencia"),
-            ("/incidente ver codigo", "Consultar detalles de la alerta de despacho"),
-            ("/incidente atender codigo unidades", "Asignar patrullas y responder al llamado (10-76)"),
-            ("/incidente cerrar codigo informe_final", "Cerrar y archivar el reporte del incidente"),
+            ("/update canal #canal [auto_anunciar] [@rol]", "Configurar el canal de anuncios de actualizaciones"),
+            ("/update configurar [version] [cambios] [desc]", "Configurar borrador de cambios (o abrir formulario modal)"),
+            ("/update preview [version]", "Previsualizar el anuncio con la personalidad sarcástica del bot"),
+            ("/update publicar [version] [#canal] [mencion]", "Publicar el anuncio oficial en el canal configurado"),
+            ("/update historial [limite]", "Consultar el historial de versiones publicadas"),
+            ("/update sync_github [publicar_inmediato]", "Sincronizar commits reales desde GitHub"),
         ]
     },
     "admin": {
@@ -236,17 +157,6 @@ HELP_CATEGORIES = {
             ("/admin propiedad crear nombre tipo precio", "Crear bienes raíces"),
             ("/adminshop predeterminados", "Cargar catálogo de 35 objetos legales"),
             ("/adminshop mercadonegro", "Cargar catálogo de mercado negro"),
-        ]
-    },
-    "server_control": {
-        "emoji": "🌴",
-        "label": "Control & Estado del Servidor",
-        "commands": [
-            ("/abrir-servidor [canal] [anuncio]", "Abrir oficialmente Miami Vice Roleplay (MVERP)"),
-            ("/cerrar-servidor [canal] [motivo]", "Cerrar oficialmente las operaciones de Roleplay"),
-            ("/votacion-servidor [duracion] [canal]", "Crear votación interactiva para abrir el servidor"),
-            ("/estado-servidor", "Consultar si el servidor está ABIERTO o CERRADO"),
-            ("/finalizar-votacion", "Concluir de inmediato la votación activa (Staff)"),
         ]
     },
 }
@@ -293,28 +203,21 @@ class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="help", description="Centro de ayuda y lista interactiva de comandos del bot")
+    @app_commands.command(name="ayuda", description="Centro de ayuda y lista interactiva de comandos del bot")
     @app_commands.describe(categoria="Categoría opcional a consultar")
     @app_commands.choices(categoria=[
         app_commands.Choice(name="💰 Economía & Trabajos", value="economia"),
         app_commands.Choice(name="🪪 Documento de Identidad (DNI)", value="dni"),
         app_commands.Choice(name="🔫 Registro Balístico de Armas", value="armas"),
-        app_commands.Choice(name="🚗 Vehículos, Trailers & ATVs", value="vehiculos"),
-        app_commands.Choice(name="🚨 B.O.L.O. (Búsqueda & Captura)", value="bolo"),
-        app_commands.Choice(name="📁 Casos & Expedientes", value="casos"),
-        app_commands.Choice(name="🚔 Central 911 & Incidentes", value="incidentes"),
-        app_commands.Choice(name="🖼️ Anuncios Embed", value="anuncios_embed"),
         app_commands.Choice(name="🎮 Conexión a Roblox", value="roblox"),
         app_commands.Choice(name="🏛️ Departamentos Oficiales", value="departamentos"),
         app_commands.Choice(name="🏦 Banco & Inversiones", value="banco"),
         app_commands.Choice(name="🛒 Tienda & Mercados", value="mercado"),
         app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
         app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
-        app_commands.Choice(name="🎫 Tickets & Soporte", value="tickets"),
-        app_commands.Choice(name="📢 Actualizaciones Bot", value="actualizaciones"),
         app_commands.Choice(name="⚙️ Administración", value="admin"),
     ])
-    async def help(self, interaction: discord.Interaction, categoria: str = None):
+    async def ayuda(self, interaction: discord.Interaction, categoria: str = None):
         if categoria and categoria in HELP_CATEGORIES:
             cat_data = HELP_CATEGORIES[categoria]
             e = info_embed(

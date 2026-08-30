@@ -563,19 +563,19 @@ CREATE TABLE IF NOT EXISTS weapon_registries (
 );
 
 -- =====================
--- BOT UPDATES & ANNOUNCEMENTS
+-- ANUNCIOS Y ACTUALIZACIONES DEL BOT (SISTEMA AUTOMATICO & GITHUB)
 -- =====================
-CREATE TABLE IF NOT EXISTS bot_updates_config (
+CREATE TABLE IF NOT EXISTS update_config (
     id TEXT PRIMARY KEY,
     guild_id TEXT UNIQUE NOT NULL,
     channel_id TEXT,
+    auto_announce BOOLEAN DEFAULT TRUE,
     github_repo TEXT DEFAULT 'Joseph1711/miami-vice-rp',
-    auto_github_enabled BOOLEAN DEFAULT TRUE,
     last_commit_sha TEXT,
-    draft_version TEXT DEFAULT 'v1.4.0',
+    draft_version TEXT,
     draft_changes TEXT,
     draft_description TEXT,
-    draft_date TEXT,
+    mention_role_id TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -585,105 +585,14 @@ CREATE TABLE IF NOT EXISTS bot_updates_history (
     guild_id TEXT NOT NULL,
     version TEXT NOT NULL,
     title TEXT NOT NULL,
-    raw_message TEXT NOT NULL,
     changes TEXT NOT NULL,
-    source TEXT DEFAULT 'manual',
+    description TEXT,
     commit_sha TEXT,
+    source TEXT DEFAULT 'manual',
+    published_by TEXT,
     channel_id TEXT,
     message_id TEXT,
-    published_by TEXT,
-    published_at TIMESTAMP DEFAULT NOW(),
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- =====================
--- VEHICLE & TRAILER & ATV REGISTRIES
--- =====================
-CREATE TABLE IF NOT EXISTS vehicle_registries (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    discord_id TEXT NOT NULL,
-    dni_id TEXT,
-    dni_number TEXT,
-    vehicle_type TEXT NOT NULL,
-    brand_model TEXT NOT NULL,
-    color TEXT NOT NULL,
-    plate TEXT UNIQUE NOT NULL,
-    vin_number TEXT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'active',
-    registration_fee NUMERIC DEFAULT 500,
-    insurance_status TEXT DEFAULT 'basic',
-    notes TEXT,
-    impound_reason TEXT,
-    impound_fine NUMERIC DEFAULT 0,
-    registered_at TIMESTAMP DEFAULT NOW(),
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- =====================
--- POLICE BOLO (BE ON THE LOOKOUT)
--- =====================
-CREATE TABLE IF NOT EXISTS police_bolos (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    bolo_code TEXT UNIQUE NOT NULL,
-    target_type TEXT NOT NULL,
-    target_name TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    danger_level TEXT DEFAULT 'media',
-    reward NUMERIC DEFAULT 0,
-    image_url TEXT,
-    status TEXT DEFAULT 'active',
-    officer_id TEXT NOT NULL,
-    officer_name TEXT,
-    resolution_notes TEXT,
-    resolved_by TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- =====================
--- POLICE & JUSTICE CASES (EXPEDIENTES)
--- =====================
-CREATE TABLE IF NOT EXISTS police_cases (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    case_number TEXT UNIQUE NOT NULL,
-    title TEXT NOT NULL,
-    category TEXT NOT NULL,
-    priority TEXT DEFAULT 'media',
-    description TEXT NOT NULL,
-    lead_detective_id TEXT NOT NULL,
-    lead_detective_name TEXT,
-    status TEXT DEFAULT 'abierto',
-    suspects_json TEXT DEFAULT '[]',
-    evidence_json TEXT DEFAULT '[]',
-    notes_json TEXT DEFAULT '[]',
-    verdict TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- =====================
--- POLICE INCIDENTS & 911 DISPATCH (DESPACHO DE EMERGENCIAS)
--- =====================
-CREATE TABLE IF NOT EXISTS police_incidents (
-    id TEXT PRIMARY KEY,
-    guild_id TEXT NOT NULL,
-    incident_code TEXT UNIQUE NOT NULL,
-    incident_type TEXT NOT NULL,
-    location TEXT NOT NULL,
-    description TEXT NOT NULL,
-    priority_code TEXT DEFAULT 'codigo_2',
-    caller_id TEXT,
-    caller_name TEXT,
-    assigned_units TEXT,
-    status TEXT DEFAULT 'activo',
-    resolution_report TEXT,
-    closed_by TEXT,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    published_at TIMESTAMP DEFAULT NOW()
 );
 
 -- =====================
@@ -695,19 +604,26 @@ CREATE TABLE IF NOT EXISTS db_state (
     initialized_at TIMESTAMP DEFAULT NOW(),
     table_count INTEGER DEFAULT 0
 );
-
 """
 
 def _check_tables_exist():
     """Verifica si las tablas ya existen sin intentar crearlas."""
-    from bot.db import execute
+    from bot.db import execute, USE_POSTGRES
     
     try:
-        result = execute(
-            """SELECT COUNT(*) as count FROM information_schema.tables 
-               WHERE table_schema = 'public'""",
-            fetch="one"
-        )
+        if USE_POSTGRES:
+            result = execute(
+                """SELECT COUNT(*) as count FROM information_schema.tables 
+                   WHERE table_schema = 'public'""",
+                fetch="one"
+            )
+        else:
+            result = execute(
+                """SELECT COUNT(*) as count FROM sqlite_master 
+                   WHERE type='table' AND name NOT LIKE 'sqlite_%'""",
+                fetch="one"
+            )
+        
         count = result.get("count", 0) if result else 0
         return count > 5  # Si hay más de 5 tablas, asumimos que ya está inicializado
     except Exception as e:
@@ -716,12 +632,27 @@ def _check_tables_exist():
 
 
 def _ensure_profile_note():
-    from bot.db import execute
+    from bot.db import USE_POSTGRES, execute
     try:
-        execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
+        if USE_POSTGRES:
+            execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
+            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
+        else:
+            u_cols = execute("PRAGMA table_info(users)", fetch="all") or []
+            if not any(column.get("name") == "profile_note" for column in u_cols):
+                execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joshi'")
+            
+            g_cols = execute("PRAGMA table_info(guild_config)", fetch="all") or []
+            g_names = [col.get("name") for col in g_cols]
+            if "admin_role_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN admin_role_id TEXT")
+            if "work_logs_channel_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN work_logs_channel_id TEXT")
+            if "applications_channel_id" not in g_names:
+                execute("ALTER TABLE guild_config ADD COLUMN applications_channel_id TEXT")
+        
         execute("UPDATE users SET profile_note='Made By Joshi' WHERE profile_note IS NULL OR profile_note='Made By Joseph'")
     except Exception as e:
         logger.warning(f"Error al agregar columnas adicionales: {e}")

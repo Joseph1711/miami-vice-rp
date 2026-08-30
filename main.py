@@ -1,15 +1,21 @@
+import sys
+try:
+    import audioop
+except ModuleNotFoundError:
+    try:
+        import audioop_lts as audioop
+        sys.modules["audioop"] = audioop
+    except ImportError:
+        pass
+
+import os
 import asyncio
 import logging
-import os
-import aiohttp
 import discord
 from discord.ext import commands
 
-from bot.config import get_settings
-from bot.events import set_bot_task
-from keep_alive import keep_alive
+from keep_alive import keep_alive, set_bot, set_bot_task
 
-# Configurar logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -17,76 +23,88 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bot")
 
-# Configurar intents
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
-intents.guilds = True
 
-# Instancia del bot
-bot = commands.Bot(
-    command_prefix="!",
-    intents=intents,
-    help_command=None,
-)
+def _log_startup_diagnostics():
+    logger.info("=" * 50)
+    logger.info("  MIAMI VICE — DIAGNÓSTICO DE ARRANQUE")
+    logger.info("=" * 50)
 
-# Extensiones / Cogs a cargar
-EXTENSIONS = [
-    "bot.cogs.verification",
-    "bot.cogs.dni",
+    discord_token = os.environ.get("DISCORD_TOKEN", "")
+
+    from bot.db import connection_label
+    logger.info(f"[ENV] BASE DE DATOS   : {connection_label()}")
+
+    if discord_token:
+        logger.info(f"[ENV] DISCORD_TOKEN  : ✅ detectado ({len(discord_token)} chars)")
+    else:
+        logger.error("[ENV] DISCORD_TOKEN  : ❌ NO CONFIGURADO")
+
+    logger.info(f"[ENV] Variables cargadas por proceso: {len(os.environ)} vars de entorno visibles")
+    logger.info("=" * 50)
+
+COGS = [
     "bot.cogs.economy",
     "bot.cogs.bank",
     "bot.cogs.inventory",
     "bot.cogs.marketplace",
+    "bot.cogs.departments",
     "bot.cogs.companies",
     "bot.cogs.properties",
-    "bot.cogs.vehicles",
-    "bot.cogs.weapons",
-    "bot.cogs.crimen",
     "bot.cogs.social",
     "bot.cogs.tickets",
-    "bot.cogs.updates",
-    "bot.cogs.departments",
+    "bot.cogs.verification",
+    "bot.cogs.crimen",
+    "bot.cogs.dni",
+    "bot.cogs.weapons",
     "bot.cogs.roblox",
-    "bot.cogs.bolo",
-    "bot.cogs.cases",
-    "bot.cogs.incidents",
-    "bot.cogs.announcements",
-    "bot.cogs.police",
-    "bot.cogs.server_control",
+    "bot.cogs.updates",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]
 
+class MiamiViceBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        intents.members = True
+        super().__init__(
+            command_prefix="!",
+            intents=intents,
+            help_command=None,
+        )
+        self.start_time = None
 
-def configure_bot(b: commands.Bot):
-    import bot.events as events_mod
+    async def setup_hook(self):
+        for cog in COGS:
+            try:
+                await self.load_extension(cog)
+                logger.info(f"Loaded cog: {cog}")
+            except Exception as e:
+                logger.error(f"Failed to load cog {cog}: {e}")
 
-    events_mod.setup_events(b)
 
-
-async def load_extensions(b: commands.Bot):
-    for ext in EXTENSIONS:
-        try:
-            await b.load_extension(ext)
-            logger.info("Cog cargado: %s", ext)
-        except Exception as e:
-            logger.warning("No se pudo cargar %s: %s", ext, e)
+def configure_bot(bot):
+    from bot.events import setup_events
+    from bot.jobs.cron import setup_jobs
+    setup_events(bot)
+    setup_jobs(bot)
 
 
 async def main():
-    settings = get_settings()
-    token = settings.discord_token
-
-    # Iniciar servidor web de monitoreo para Render/Uptime
-    logger.info(
-        "Panel web de Miami Vice RP disponible en el puerto %s",
-        settings.port,
+    _log_startup_diagnostics()
+    bot = MiamiViceBot()
+    token = os.environ.get("DISCORD_TOKEN")
+    set_bot(
+        bot,
+        asyncio.get_running_loop(),
+        token,
+        factory=MiamiViceBot,
+        configurator=configure_bot,
     )
     keep_alive()
 
     if not token:
-        logger.error("DISCORD_TOKEN no configurado en las variables de entorno.")
+        logger.error("DISCORD_TOKEN not set in environment")
         logger.warning("El panel seguirá disponible; configura DISCORD_TOKEN para encender el bot.")
         await asyncio.Event().wait()
         return
@@ -119,61 +137,35 @@ async def main():
         await asyncio.Event().wait()
         return
 
-    # Loop de conexión con manejo inteligente de Rate Limits (429 Cloudflare / Discord)
-    retry_delay = 10
-    max_delay = 300  # Máximo 5 minutos de espera exponencial
-
-    while True:
+    # Intentar conectar con reintentos
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
         try:
-            logger.info("Iniciando conexión con Discord...")
+            logger.info(f"Intento de conexión {retry_count + 1}/{max_retries}...")
             bot_task = asyncio.create_task(bot.start(token))
             set_bot_task(bot_task)
             await bot_task
-            break
+            break  # Si se conecta exitosamente, salir del loop
         except discord.LoginFailure:
-            logger.critical("❌ Token inválido rechazado por Discord. Verifica DISCORD_TOKEN.")
-            await asyncio.Event().wait()
-            return
-        except discord.HTTPException as http_err:
-            if http_err.status == 429:
-                logger.warning(
-                    f"⚠️ [RATE LIMIT 429] Discord/Cloudflare ha bloqueado temporalmente la IP del servidor de Render. "
-                    f"Esperando {retry_delay}s antes de reintentar para no saturar la API..."
-                )
-            else:
-                logger.error(f"Error HTTP de Discord ({http_err.status}): {http_err}. Reintentando en {retry_delay}s...")
-            
-            # Cerrar sesión limpia de aiohttp si quedó abierta
-            try:
-                if not bot.is_closed():
-                    await bot.close()
-            except Exception:
-                pass
-
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, max_delay)
-        except (discord.ConnectionClosed, OSError, aiohttp.ClientError) as conn_err:
-            logger.warning(f"Conexión perdida con Discord ({conn_err}). Reintentando en {retry_delay}s...")
-            try:
-                if not bot.is_closed():
-                    await bot.close()
-            except Exception:
-                pass
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, max_delay)
+            logger.error("❌ Discord rechazó DISCORD_TOKEN; verifica que sea válido.")
+            logger.error("La web continúa disponible en http://localhost:3000")
+            raise
+        except (discord.ConnectionClosed, OSError) as e:
+            retry_count += 1
+            logger.warning(f"Conexión perdida: {e}. Reintentando en 5s... ({retry_count}/{max_retries})")
+            if retry_count >= max_retries:
+                logger.error("No se pudo conectar después de múltiples intentos.")
+                raise RuntimeError("Discord no está disponible después de múltiples intentos") from e
+            await asyncio.sleep(5)  # Esperar antes de reintentar
         except Exception as error:
-            logger.error(f"Error inesperado durante la ejecución: {error}")
-            try:
-                if not bot.is_closed():
-                    await bot.close()
-            except Exception:
-                pass
-            await asyncio.sleep(retry_delay)
-            retry_delay = min(retry_delay * 2, max_delay)
-
+            logger.error(f"Error inesperado: {error}")
+            retry_count += 1
+            if retry_count >= max_retries:
+                await asyncio.Event().wait()
+                return
+            await asyncio.sleep(5)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot detenido manualmente.")
+    asyncio.run(main())

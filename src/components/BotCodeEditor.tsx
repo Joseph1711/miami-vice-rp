@@ -34,8 +34,7 @@ export function BotCodeEditor() {
   const fetchFiles = async () => {
     try {
       const res = await fetch('/api/bot/files');
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      if (res.ok) {
         const data = await res.json();
         setFiles(data.files || []);
       }
@@ -49,8 +48,7 @@ export function BotCodeEditor() {
     setError(null);
     try {
       const res = await fetch(`/api/bot/file-content?path=${encodeURIComponent(filePath)}`);
-      const contentType = res.headers.get('content-type') || '';
-      if (res.ok && contentType.includes('application/json')) {
+      if (res.ok) {
         const data = await res.json();
         setContent(data.content);
         setInitialContent(data.content);
