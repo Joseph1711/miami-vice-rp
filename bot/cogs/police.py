@@ -311,6 +311,272 @@ class Police(commands.Cog, name="Policía & Justicia"):
         e.set_footer(text=f"Consulta efectuada por {interaction.user.name} • Sistema CAD/MDT Miami Vice")
         await interaction.followup.send(embed=e)
 
+    @policia.command(name="mis_multas", description="Ver tus multas e infracciones pendientes de pago y fianzas")
+    async def mis_multas(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        gid = str(interaction.guild_id)
+        uid = str(interaction.user.id)
+
+        records = await aexecute(
+            "SELECT * FROM criminal_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 15",
+            (gid, uid), fetch="all"
+        ) or []
+
+        if not records:
+            await interaction.followup.send(
+                embed=success_embed("Sin Infracciones", "No tienes multas pendientes ni antecedentes registrados en el sistema."),
+                ephemeral=True
+            )
+            return
+
+        e = info_embed(
+            "📄 Tus Infracciones & Expediente Judicial",
+            "A continuación se listan tus infracciones y registros legales en Miami Vice RP. Usa `/policia pagar_multa` o `/policia pagar_fianza` para saldar tus obligaciones."
+        )
+
+        unpaid_count = 0
+        total_debt = 0
+
+        for idx, r in enumerate(records, 1):
+            status = r.get("status", "active")
+            monto = r.get("fine_amount", 0)
+            tipo = r.get("crime_type", "Registro")
+            desc = r.get("description", "Sin detalle")
+            rec_id = str(r.get("id", ""))[:8].upper()
+            fecha = str(r.get("created_at", ""))[:10]
+
+            if status in ("fined", "unpaid", "pending", "active") and monto > 0:
+                badge = "🔴 PENDIENTE DE PAGO"
+                unpaid_count += 1
+                total_debt += monto
+            elif status == "paid":
+                badge = "🟢 PAGADA"
+            elif status == "arrested":
+                badge = f"🚨 ARRESTADO (Fianza: {format_currency(monto)})" if monto > 0 else "🚨 ARRESTADO (Sin fianza)"
+            elif status == "bailed":
+                badge = "🔓 LIBERADO BAJO FIANZA"
+            else:
+                badge = f"ℹ️ {status.upper()}"
+
+            e.add_field(
+                name=f"#{idx} [{badge}] Folio #{rec_id} — {tipo}",
+                value=f"• **Monto:** {format_currency(monto)}\n• **Motivo:** {desc}\n• **Fecha:** {fecha}",
+                inline=False
+            )
+
+        if unpaid_count > 0:
+            e.description = f"⚠️ Tienes **{unpaid_count} multa(s) pendientes** por un total de **{format_currency(total_debt)}**.\nPuedes pagarlas usando `/policia pagar_multa`."
+
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+    @policia.command(name="pagar_multa", description="Pagar una multa de tránsito o infracción pendiente")
+    @app_commands.describe(folio="Código de Folio de la multa (ej: Folio #A1B2C3D4 o déjalo vacío para pagar la más reciente)")
+    async def pagar_multa(self, interaction: discord.Interaction, folio: str = None):
+        await interaction.response.defer()
+        gid = str(interaction.guild_id)
+        uid = str(interaction.user.id)
+
+        # Buscar multa pendiente
+        if folio:
+            clean_folio = folio.replace("#", "").strip().lower()
+            record = await aexecute(
+                """SELECT * FROM criminal_records 
+                   WHERE guild_id=$1 AND discord_id=$2 AND status IN ('fined', 'unpaid', 'pending', 'active') AND id ILIKE $3
+                   ORDER BY created_at DESC LIMIT 1""",
+                (gid, uid, f"{clean_folio}%"), fetch="one"
+            )
+        else:
+            record = await aexecute(
+                """SELECT * FROM criminal_records 
+                   WHERE guild_id=$1 AND discord_id=$2 AND status IN ('fined', 'unpaid', 'pending', 'active') AND fine_amount > 0 AND crime_type LIKE '%Multa%'
+                   ORDER BY created_at DESC LIMIT 1""",
+                (gid, uid), fetch="one"
+            )
+            if not record:
+                # Buscar cualquier registro con deuda pendiente
+                record = await aexecute(
+                    """SELECT * FROM criminal_records 
+                       WHERE guild_id=$1 AND discord_id=$2 AND status IN ('fined', 'unpaid', 'pending', 'active') AND fine_amount > 0
+                       ORDER BY created_at DESC LIMIT 1""",
+                    (gid, uid), fetch="one"
+                )
+
+        if not record or record.get("fine_amount", 0) <= 0:
+            await interaction.followup.send(
+                embed=error_embed("Sin Multas Pendientes", "No tienes multas pendientes de pago registradas con ese folio. Usa `/policia mis_multas` para verificar tu estado."),
+                ephemeral=True
+            )
+            return
+
+        monto = record.get("fine_amount", 0)
+        user_row = await async_get_or_create_user(uid, gid, username=interaction.user.name, display_name=interaction.user.display_name)
+        cash_val = user_row.get("cash", 0)
+        bank_val = user_row.get("bank", 0)
+        total_balance = cash_val + bank_val
+
+        if total_balance < monto:
+            await interaction.followup.send(
+                embed=error_embed(
+                    "Fondos Insuficientes",
+                    f"La multa asciende a **{format_currency(monto)}**, pero tu saldo total (efectivo + banco) es de **{format_currency(total_balance)}**."
+                ),
+                ephemeral=True
+            )
+            return
+
+        # Cobrar primero en efectivo, luego banco
+        metodo = ""
+        if cash_val >= monto:
+            await async_remove_cash(uid, gid, monto)
+            metodo = "Efectivo"
+        else:
+            rem = monto - cash_val
+            if cash_val > 0:
+                await async_remove_cash(uid, gid, cash_val)
+            await async_remove_bank(uid, gid, rem)
+            metodo = "Efectivo y Cuenta Bancaria"
+
+        # Registrar transacción
+        await async_log_transaction(uid, gid, "pay", -monto, f"Pago de multa Folio #{record['id'][:8].upper()}: {record.get('description', '')[:30]}")
+
+        # Actualizar registro a pagado
+        await aexecute(
+            "UPDATE criminal_records SET status='paid' WHERE id=$1",
+            (record["id"],)
+        )
+
+        dni_rec = await aexecute(
+            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 1",
+            (gid, uid), fetch="one"
+        )
+        dni_num = dni_rec.get("dni_number", "S/D") if dni_rec else "Sin DNI"
+
+        e = discord.Embed(
+            title="🧾 COMPROBANTE OFICIAL DE PAGO DE MULTA",
+            description=f"Se ha liquidado satisfactoriamente la infracción asentada en el Departamento de Tránsito.",
+            color=discord.Color.green(),
+            timestamp=datetime.datetime.utcnow()
+        )
+        if dni_rec and dni_rec.get("avatar_url"):
+            e.set_thumbnail(url=dni_rec["avatar_url"])
+        else:
+            e.set_thumbnail(url=interaction.user.display_avatar.url)
+
+        e.add_field(name="👤 Ciudadano / Pagador", value=f"{interaction.user.mention} (`{interaction.user.name}`)", inline=True)
+        e.add_field(name="🪪 DNI", value=f"`{dni_num}`", inline=True)
+        e.add_field(name="💵 Monto Pagado", value=f"**{format_currency(monto)}**", inline=True)
+        e.add_field(name="💳 Método de Cobro", value=metodo, inline=True)
+        e.add_field(name="📝 Infracción Liquidada", value=f"```{record.get('description', 'Multa de tránsito')}```", inline=False)
+        e.set_footer(text=f"Folio #{record['id'][:8].upper()} • Estado: PAGADA 🟢")
+
+        await interaction.followup.send(embed=e)
+
+    @policia.command(name="pagar_fianza", description="Pagar la fianza judicial de un arresto para obtener la libertad inmediata")
+    @app_commands.describe(ciudadano="Ciudadano detenido al que deseas pagarle la fianza (omite para pagarte a ti mismo)")
+    async def pagar_fianza(self, interaction: discord.Interaction, ciudadano: discord.Member = None):
+        await interaction.response.defer()
+        target = ciudadano or interaction.user
+        gid = str(interaction.guild_id)
+        target_uid = str(target.id)
+        payer_uid = str(interaction.user.id)
+
+        # Buscar arresto activo con fianza
+        arrest_record = await aexecute(
+            """SELECT * FROM criminal_records 
+               WHERE guild_id=$1 AND discord_id=$2 AND status='arrested'
+               ORDER BY created_at DESC LIMIT 1""",
+            (gid, target_uid), fetch="one"
+        )
+
+        if not arrest_record:
+            # Buscar el arresto más reciente si no tenía status='arrested'
+            arrest_record = await aexecute(
+                """SELECT * FROM criminal_records 
+                   WHERE guild_id=$1 AND discord_id=$2 AND crime_type='Arresto Policial' AND status != 'bailed'
+                   ORDER BY created_at DESC LIMIT 1""",
+                (gid, target_uid), fetch="one"
+            )
+
+        if not arrest_record:
+            await interaction.followup.send(
+                embed=error_embed("Sin Arresto Activo", f"{target.mention} no tiene ningún expediente de arresto activo o pendiente de fianza."),
+                ephemeral=True
+            )
+            return
+
+        fianza_monto = arrest_record.get("fine_amount", 0)
+        if fianza_monto <= 0:
+            await interaction.followup.send(
+                embed=error_embed("Sin Derecho a Fianza ❌", f"El arresto de {target.mention} fue catalogado **SIN DERECHO A FIANZA** debido a la gravedad de los cargos."),
+                ephemeral=True
+            )
+            return
+
+        # Verificar fondos del pagador
+        payer_row = await async_get_or_create_user(payer_uid, gid, username=interaction.user.name, display_name=interaction.user.display_name)
+        cash_val = payer_row.get("cash", 0)
+        bank_val = payer_row.get("bank", 0)
+        total_balance = cash_val + bank_val
+
+        if total_balance < fianza_monto:
+            await interaction.followup.send(
+                embed=error_embed(
+                    "Fondos Insuficientes",
+                    f"La fianza judicial asciende a **{format_currency(fianza_monto)}**, pero tu saldo total disponible es de **{format_currency(total_balance)}**."
+                ),
+                ephemeral=True
+            )
+            return
+
+        # Cobrar fianza al pagador
+        metodo = ""
+        if cash_val >= fianza_monto:
+            await async_remove_cash(payer_uid, gid, fianza_monto)
+            metodo = "Efectivo"
+        else:
+            rem = fianza_monto - cash_val
+            if cash_val > 0:
+                await async_remove_cash(payer_uid, gid, cash_val)
+            await async_remove_bank(payer_uid, gid, rem)
+            metodo = "Efectivo y Banco"
+
+        # Registrar transacción
+        await async_log_transaction(payer_uid, gid, "pay", -fianza_monto, f"Pago de fianza judicial para {target.name} (Exp. #{arrest_record['id'][:8].upper()})")
+
+        # Marcar registro penal como liberado bajo fianza
+        await aexecute(
+            "UPDATE criminal_records SET status='bailed' WHERE id=$1",
+            (arrest_record["id"],)
+        )
+
+        dni_rec = await aexecute(
+            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 1",
+            (gid, target_uid), fetch="one"
+        )
+        dni_num = dni_rec.get("dni_number", "S/D") if dni_rec else "Sin DNI"
+        nombre_ic = dni_rec.get("full_name", target.display_name) if dni_rec else target.display_name
+
+        e = discord.Embed(
+            title="⚖️ LIBERTAD BAJO FIANZA JUDICIAL",
+            description=f"Se ha efectuado el pago total de la caución penal fijada por el Departamento de Justicia.",
+            color=discord.Color.gold(),
+            timestamp=datetime.datetime.utcnow()
+        )
+        if dni_rec and dni_rec.get("avatar_url"):
+            e.set_thumbnail(url=dni_rec["avatar_url"])
+        else:
+            e.set_thumbnail(url=target.display_avatar.url)
+
+        e.add_field(name="👤 Sospechoso Liberado", value=f"{target.mention} (**{nombre_ic}**)", inline=True)
+        e.add_field(name="🪪 DNI", value=f"`{dni_num}`", inline=True)
+        e.add_field(name="💵 Monto de Fianza Pagado", value=f"**{format_currency(fianza_monto)}**", inline=True)
+        e.add_field(name="🤝 Depositante / Fiador", value=f"{interaction.user.mention}", inline=True)
+        e.add_field(name="💳 Método", value=metodo, inline=True)
+        e.add_field(name="⚖️ Cargos Originales", value=f"```{arrest_record.get('description', 'Cargos penales')}```", inline=False)
+        e.set_footer(text=f"Expediente #{arrest_record['id'][:8].upper()} • Estado: LIBERADO BAJO FIANZA 🔓")
+
+        await interaction.followup.send(content=f"{target.mention}", embed=e)
+
 
 async def setup(bot):
     await bot.add_cog(Police(bot))

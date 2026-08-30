@@ -2878,5 +2878,45 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "🎫 Centro de Atención & Soporte",
       "embedContent": "Presiona el botón **'Abrir Ticket'** para contactar con el Staff.\n\n📝 **Requisito:** Al hacer clic, se abre un formulario (modal) solicitando:\n1. ¿Qué necesitas? (Dudas, reporte, compras, bugs...)\n2. ¿Por qué abres este ticket? (Explicación detallada)"
     }
+  },
+  {
+    "command": "/policia pagar_multa",
+    "category": "Policía y Seguridad",
+    "cog": "police",
+    "description": "Pagar y liquidar una multa de tránsito o infracción pendiente con descuento en efectivo o banco",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando de pago de multas no existía",
+      "discordStatus": "❌ No implementado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Multa Folio #A1B2C3D4 liquidada exitosamente por @Ciudadano -> Descontado $750.00.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "15 ms",
+      "embedTitle": "🧾 COMPROBANTE OFICIAL DE PAGO DE MULTA",
+      "embedContent": "Se ha liquidado satisfactoriamente la infracción asentada en el Departamento de Tránsito:\n\n👤 **Ciudadano / Pagador:** @Ciudadano (`MIA-482910`)\n💵 **Monto Pagado:** `$750.00`\n💳 **Método de Cobro:** Efectivo\n📝 **Infracción Liquidada:** Exceso de velocidad en zona escolar\n\n*Folio #A1B2C3D4 • Estado: PAGADA 🟢*"
+    }
+  },
+  {
+    "command": "/policia pagar_fianza",
+    "category": "Policía y Seguridad",
+    "cog": "police",
+    "description": "Pagar la caución judicial de un arresto para otorgar la libertad inmediata a un sospechoso",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando de pago de fianzas no existía",
+      "discordStatus": "❌ No implementado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Fianza de $5,000 abonada por @Fiador para liberar a @Sospechoso -> Estado cambiado a 'bailed'.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "18 ms",
+      "embedTitle": "⚖️ LIBERTAD BAJO FIANZA JUDICIAL",
+      "embedContent": "Se ha efectuado el pago total de la caución penal fijada por el Departamento de Justicia:\n\n👤 **Sospechoso Liberado:** @Sospechoso (**Tommy Vance**)\n🪪 **DNI:** `MIA-583920`\n💵 **Monto de Fianza:** `$5,000.00`\n🤝 **Depositante / Fiador:** @Fiador\n⚖️ **Cargos Originales:** Conducción temeraria y desacato\n\n*Expediente #EXP-9382 • Estado: LIBERADO BAJO FIANZA 🔓*"
+    }
   }
 ];

@@ -40,6 +40,9 @@ HELP_CATEGORIES = {
             ("/policia arrestar @ciudadano motivo [tiempo] [fianza]", "Arrestar y procesar judicialmente a un infractor"),
             ("/policia multar @ciudadano monto motivo", "Emitir y cobrar una multa/infracción a un ciudadano"),
             ("/policia antecedentes @ciudadano", "Consultar el historial delictivo, multas y arrestos de un usuario"),
+            ("/policia mis_multas", "Consultar tus multas pendientes, historial y fianzas fijadas"),
+            ("/policia pagar_multa [folio]", "Pagar y liquidar una multa pendiente (efectivo o banco)"),
+            ("/policia pagar_fianza [ciudadano]", "Pagar la fianza judicial de un detenido para otorgarle libertad"),
             ("/policia configurar_roles roles", "Configurar roles de Discord autorizados para usar comandos policiales (Admin)"),
         ]
     },
