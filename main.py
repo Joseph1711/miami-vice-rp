@@ -58,6 +58,7 @@ COGS = [
     "bot.cogs.weapons",
     "bot.cogs.roblox",
     "bot.cogs.updates",
+    "bot.cogs.vehicles",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]

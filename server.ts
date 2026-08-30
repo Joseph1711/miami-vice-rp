@@ -135,6 +135,7 @@ app.get("/api/bot/status", (req, res) => {
     "bot.cogs.weapons",
     "bot.cogs.roblox",
     "bot.cogs.updates",
+    "bot.cogs.vehicles",
     "bot.cogs.admin",
     "bot.cogs.help",
   ];
@@ -365,6 +366,7 @@ try:
         "department_audit": ("departments_fleet", "Auditoría de fondos departamentales"),
         "fleet_vehicle_types": ("departments_fleet", "Tipos y modelos de patrullas y vehículos"),
         "fleet_vehicles": ("departments_fleet", "Unidades en servicio por departamento"),
+        "vehicle_registries": ("departments_fleet", "Registro y matrículas de vehículos particulares, trailers y ATVs"),
         "weapon_registries": ("crime_drugs", "Registro balístico y licencias de armas de fuego"),
         "criminal_missions": ("crime_drugs", "Misiones y golpes delictivos"),
         "drug_operations": ("crime_drugs", "Laboratorios y cultivos clandestinos"),

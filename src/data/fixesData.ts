@@ -2606,17 +2606,77 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
     "description": "Centro interactivo de ayuda con menú desplegable de categorías y catálogo de comandos actualizado",
     "beforeBehavior": {
       "state": "silent_crash",
-      "log": "[ERROR] El comando previo /ayuda requería migración a /help y carecía de las nuevas categorías DNI, Balística, Roblox y Updates",
+      "log": "[ERROR] El comando previo /ayuda requería migración a /help y carecía de las nuevas categorías DNI, Balística, Vehículos, Roblox y Updates",
       "discordStatus": "❌ Comando /help no encontrado",
       "timeElapsed": "0 ms"
     },
     "afterBehavior": {
       "state": "success",
-      "log": "[INFO] /help invocado -> Generado menú interactivo HelpCategorySelect con 12 categorías y +80 comandos registrados.",
+      "log": "[INFO] /help invocado -> Generado menú interactivo HelpCategorySelect con 13 categorías y +90 comandos registrados.",
       "discordStatus": "✅ Ejecución completada",
       "timeElapsed": "22 ms",
       "embedTitle": "🌴 Miami Vice RP — Centro de Comandos",
-      "embedContent": "Bienvenido al sistema integral de Roleplay para **Miami Vice**.\n\nCategorías disponibles:\n• 💰 Economía & Trabajos (11 comandos)\n• 🪪 Documento de Identidad (4 comandos)\n• 🔫 Registro Balístico de Armas (5 comandos)\n• 🎮 Conexión a Roblox (3 comandos)\n• 🏛️ Departamentos Oficiales (10 comandos)\n• 🏦 Banco & Inversiones (8 comandos)\n• 🛒 Tienda & Mercados (8 comandos)\n• 🏢 Empresas & Propiedades (8 comandos)\n• 🕶️ Crimen & Bajos Fondos (6 comandos)\n• 🎫 Tickets & Soporte (3 comandos)\n• 📢 Anuncios de Actualizaciones (7 comandos)\n• ⚙️ Administración (10 comandos)\n\n*Selecciona una categoría en el menú desplegable para ver detalles.*"
+      "embedContent": "Bienvenido al sistema integral de Roleplay para **Miami Vice**.\n\nCategorías disponibles:\n• 💰 Economía & Trabajos (11 comandos)\n• 🪪 Documento de Identidad (4 comandos)\n• 🔫 Registro Balístico de Armas (5 comandos)\n• 🚗 Vehículos, Trailers & ATVs (8 comandos)\n• 🎮 Conexión a Roblox (3 comandos)\n• 🏛️ Departamentos Oficiales (10 comandos)\n• 🏦 Banco & Inversiones (8 comandos)\n• 🛒 Tienda & Mercados (8 comandos)\n• 🏢 Empresas & Propiedades (8 comandos)\n• 🕶️ Crimen & Bajos Fondos (6 comandos)\n• 🎫 Tickets & Soporte (3 comandos)\n• 📢 Anuncios de Actualizaciones (7 comandos)\n• ⚙️ Administración (10 comandos)\n\n*Selecciona una categoría en el menú desplegable para ver detalles.*"
+    }
+  },
+  {
+    "command": "/vehiculo registrar",
+    "category": "Vehículos y Remolques",
+    "cog": "vehicles",
+    "description": "Matricular legalmente un automóvil, trailer/remolque, cuatrimoto/ATV o lancha emitiendo placa y VIN únicos",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Sin sistema de registro vehicular civil, remolques o ATVs",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] DNI validado -> Tasa municipal de $500 cobrada -> Placa 'ATV-4821' y VIN '1MV-ATV-849201-FL' generados -> Tarjeta de circulación emitida.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "24 ms",
+      "embedTitle": "🚜 Título de Propiedad y Tarjeta de Circulación",
+      "embedContent": "El Departamento de Tránsito y Transporte de **Miami Vice** ha registrado oficialmente esta unidad.\n\n🏷️ **Placa Oficial:** `ATV-4821`\n🔢 **VIN:** `1MV-ATV-849201-FL`\n🚦 **Tipo:** 🚜 ATV / Cuatrimoto / Buggy / Off-Road\n🚘 **Modelo:** Yamaha Raptor 700R Special Edition\n🎨 **Color:** Negro Mate con vivos Cyan\n👤 **Titular:** @Joshi (DNI: `MIA-849201`)\n🛡️ **Seguro:** 🟢 Cobertura Básica Activa"
+    }
+  },
+  {
+    "command": "/vehiculo mis_vehiculos",
+    "category": "Vehículos y Remolques",
+    "cog": "vehicles",
+    "description": "Consultar la lista completa de automóviles, trailers y ATVs registrados en el garage del ciudadano",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando no disponible",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] SELECT * FROM vehicle_registries WHERE discord_id=$1 -> 3 unidades encontradas.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "16 ms",
+      "embedTitle": "Garage & Parque Automotor de Joshi",
+      "embedContent": "Tienes un total de **3** unidades matriculadas:\n\n🚜 **Placa: ATV-4821 [ATV]**\n• Modelo: Yamaha Raptor 700R (Negro Mate)\n• VIN: `1MV-ATV-849201-FL` | Estado: 🟢 En Circulación\n\n🚛 **Placa: TRL-9302 [Trailer]**\n• Modelo: Remolque Plataforma Doble Eje (Gris Nardo)\n• VIN: `1MV-TRL-102938-FL` | Estado: 🟢 En Circulación\n\n🚗 **Placa: MIA-7821 [Automóvil]**\n• Modelo: Dodge Charger SRT Hellcat (Rojo Rubí)\n• VIN: `1MV-AUT-738201-FL` | Estado: 🟢 En Circulación"
+    }
+  },
+  {
+    "command": "/vehiculo transferir",
+    "category": "Vehículos y Remolques",
+    "cog": "vehicles",
+    "description": "Transferir legalmente la titularidad de un vehículo o trailer a otro ciudadano con validación de DNI y fondos",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando no disponible",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Titularidad de placa TRL-9302 transferida exitosamente a comprador validado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "20 ms",
+      "embedTitle": "Transferencia Vehicular Completada",
+      "embedContent": "El título de propiedad del vehículo **Remolque Plataforma Doble Eje** con placa `TRL-9302` ha sido transferido exitosamente.\n\n📤 **Antiguo Titular:** @Joshi\n📥 **Nuevo Titular:** @Carlos\n💵 **Importe de Transferencia:** `$3,500.00`\n🪪 **Nuevo DNI Registrado:** `MIA-294012`"
     }
   }
 ];

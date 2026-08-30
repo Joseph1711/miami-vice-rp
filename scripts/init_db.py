@@ -597,6 +597,31 @@ CREATE TABLE IF NOT EXISTS bot_updates_history (
 );
 
 -- =====================
+-- VEHICLE & TRAILER & ATV REGISTRIES
+-- =====================
+CREATE TABLE IF NOT EXISTS vehicle_registries (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    dni_id TEXT,
+    dni_number TEXT,
+    vehicle_type TEXT NOT NULL,
+    brand_model TEXT NOT NULL,
+    color TEXT NOT NULL,
+    plate TEXT UNIQUE NOT NULL,
+    vin_number TEXT UNIQUE NOT NULL,
+    status TEXT DEFAULT 'active',
+    registration_fee NUMERIC DEFAULT 500,
+    insurance_status TEXT DEFAULT 'basic',
+    notes TEXT,
+    impound_reason TEXT,
+    impound_fine NUMERIC DEFAULT 0,
+    registered_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
 -- DB INITIALIZATION STATE
 -- =====================
 CREATE TABLE IF NOT EXISTS db_state (

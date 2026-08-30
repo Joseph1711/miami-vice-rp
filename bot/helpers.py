@@ -235,3 +235,59 @@ async def generate_unique_weapon_serial(guild_id: str) -> str:
             return serial
     return f"MV-WPN-{uuid.uuid4().hex[:8].upper()}"
 
+async def generate_unique_vehicle_plate(guild_id: str, vehicle_type: str = "auto") -> str:
+    """Genera una placa de circulación única y estilizada según el tipo de vehículo."""
+    import random
+    import string
+    
+    prefix = "MIA"
+    if vehicle_type in ("trailer", "remolque"):
+        prefix = "TRL"
+    elif vehicle_type in ("atv", "cuatrimoto", "quad", "buggy"):
+        prefix = "ATV"
+    elif vehicle_type in ("moto", "motocicleta", "scooter"):
+        prefix = "MOT"
+    elif vehicle_type in ("lancha", "bote", "jet_ski"):
+        prefix = "SEA"
+    elif vehicle_type in ("camion", "comercial"):
+        prefix = "TRK"
+
+    for _ in range(30):
+        num = random.randint(1000, 9999)
+        plate = f"{prefix}-{num}"
+        existing = await aexecute("SELECT id FROM vehicle_registries WHERE plate=$1", (plate,), fetch="one")
+        if not existing:
+            return plate
+            
+    # Fallback con letra
+    letter = random.choice(string.ascii_uppercase)
+    return f"{prefix}-{random.randint(100, 999)}{letter}"
+
+async def generate_unique_vin(guild_id: str, vehicle_type: str = "auto") -> str:
+    """Genera un número de serie / VIN de chasis único para el vehículo registrado."""
+    import random
+    import string
+
+    code_map = {
+        "auto": "AUT",
+        "suv": "SUV",
+        "moto": "MOT",
+        "atv": "ATV",
+        "trailer": "TRL",
+        "camion": "TRK",
+        "lancha": "BOT",
+        "otro": "VEH"
+    }
+    code = code_map.get(vehicle_type, "VEH")
+    
+    for _ in range(30):
+        digits = "".join([str(random.randint(0, 9)) for _ in range(6)])
+        letters = "".join(random.choices(string.ascii_uppercase, k=2))
+        vin = f"1MV-{code}-{digits}-{letters}"
+        existing = await aexecute("SELECT id FROM vehicle_registries WHERE vin_number=$1", (vin,), fetch="one")
+        if not existing:
+            return vin
+
+    return f"1MV-{code}-{uuid.uuid4().hex[:8].upper()}"
+
+
