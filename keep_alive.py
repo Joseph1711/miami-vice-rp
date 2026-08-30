@@ -288,12 +288,9 @@ def api_bot_logs_clear():
 @app.route("/api/database/stats")
 def api_database_stats():
     try:
-        from bot.db import is_postgres, check_connection
+        from bot.db import check_connection
         check_connection()
-        if is_postgres():
-            tables_rows = _safe_query("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
-        else:
-            tables_rows = _safe_query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+        tables_rows = _safe_query("SELECT table_name as name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name")
 
         tables_list = [r["name"] for r in tables_rows] if tables_rows else []
         table_stats = []

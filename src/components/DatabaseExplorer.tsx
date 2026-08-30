@@ -110,7 +110,8 @@ export function DatabaseExplorer() {
   const fetchStats = async () => {
     try {
       const res = await fetch('/api/database/stats');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setStats(data);
       }
@@ -136,7 +137,8 @@ export function DatabaseExplorer() {
         sortOrder: currentOrder,
       });
       const res = await fetch(`/api/database/table-data?${params.toString()}`);
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setColumns(data.columns || []);
         setRows(data.rows || []);

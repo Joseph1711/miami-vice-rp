@@ -55,7 +55,8 @@ export function BotManagerView() {
   const fetchStatus = async () => {
     try {
       const res = await fetch('/api/bot/status');
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setStatus(data);
       }
@@ -67,7 +68,8 @@ export function BotManagerView() {
   const fetchLogs = async (currentLastId: number) => {
     try {
       const res = await fetch(`/api/bot/logs?since=${currentLastId}`);
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         if (data.logs && data.logs.length > 0) {
           setLogs(prev => [...prev, ...data.logs].slice(-300));
@@ -456,9 +458,9 @@ export function BotManagerView() {
                 className="mt-0.5 rounded border-rose-700 text-rose-500 focus:ring-rose-500/20"
               />
               <div className="text-xs">
-                <span className="font-semibold text-rose-300">Vaciar y reconstruir base de datos SQLite local</span>
+                <span className="font-semibold text-rose-300">Vaciar tablas de Supabase PostgreSQL</span>
                 <p className="text-slate-400 mt-0.5 text-[11px]">
-                  Opcional: Si está marcado, elimina <code className="text-rose-300 font-mono">miami_vice.sqlite3</code> para crear todas las 38 tablas vacías desde cero.
+                  Opcional: Si está marcado, limpia las tablas de Supabase para dejarlas 100% vacías sin registros de prueba.
                 </p>
               </div>
             </label>

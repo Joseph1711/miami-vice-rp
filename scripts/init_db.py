@@ -700,22 +700,14 @@ CREATE TABLE IF NOT EXISTS db_state (
 
 def _check_tables_exist():
     """Verifica si las tablas ya existen sin intentar crearlas."""
-    from bot.db import execute, USE_POSTGRES
+    from bot.db import execute
     
     try:
-        if USE_POSTGRES:
-            result = execute(
-                """SELECT COUNT(*) as count FROM information_schema.tables 
-                   WHERE table_schema = 'public'""",
-                fetch="one"
-            )
-        else:
-            result = execute(
-                """SELECT COUNT(*) as count FROM sqlite_master 
-                   WHERE type='table' AND name NOT LIKE 'sqlite_%'""",
-                fetch="one"
-            )
-        
+        result = execute(
+            """SELECT COUNT(*) as count FROM information_schema.tables 
+               WHERE table_schema = 'public'""",
+            fetch="one"
+        )
         count = result.get("count", 0) if result else 0
         return count > 5  # Si hay más de 5 tablas, asumimos que ya está inicializado
     except Exception as e:
@@ -724,27 +716,12 @@ def _check_tables_exist():
 
 
 def _ensure_profile_note():
-    from bot.db import USE_POSTGRES, execute
+    from bot.db import execute
     try:
-        if USE_POSTGRES:
-            execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
-            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
-            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
-            execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
-        else:
-            u_cols = execute("PRAGMA table_info(users)", fetch="all") or []
-            if not any(column.get("name") == "profile_note" for column in u_cols):
-                execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joshi'")
-            
-            g_cols = execute("PRAGMA table_info(guild_config)", fetch="all") or []
-            g_names = [col.get("name") for col in g_cols]
-            if "admin_role_id" not in g_names:
-                execute("ALTER TABLE guild_config ADD COLUMN admin_role_id TEXT")
-            if "work_logs_channel_id" not in g_names:
-                execute("ALTER TABLE guild_config ADD COLUMN work_logs_channel_id TEXT")
-            if "applications_channel_id" not in g_names:
-                execute("ALTER TABLE guild_config ADD COLUMN applications_channel_id TEXT")
-        
+        execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
+        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
+        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
+        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
         execute("UPDATE users SET profile_note='Made By Joshi' WHERE profile_note IS NULL OR profile_note='Made By Joseph'")
     except Exception as e:
         logger.warning(f"Error al agregar columnas adicionales: {e}")
