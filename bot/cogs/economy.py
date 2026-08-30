@@ -325,6 +325,169 @@ class Economy(commands.Cog):
         await add_xp(str(interaction.user.id), str(interaction.guild_id), 50, self.bot)
         await interaction.followup.send(embed=success_embed("¡Recompensa Diaria!", f"Has recibido **{format_currency(amount)}** 💵"))
 
+    async def _handle_salary_claim(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        cd = check_cooldown(f"sueldo_cmd:{interaction.user.id}:{interaction.guild_id}", 3)
+        if cd:
+            await interaction.followup.send(embed=error_embed("Espera", f"Intenta en `{cd:.1f}s`"), ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild_id)
+        user_id = str(interaction.user.id)
+        user = await async_get_or_create_user(user_id, guild_id, username=interaction.user.name, display_name=interaction.user.display_name)
+        now = datetime.datetime.utcnow()
+
+        # Verificar si ya cobró sueldo en las últimas 24 horas
+        last_salary = user.get("last_salary")
+        if last_salary:
+            elapsed = get_elapsed_seconds(last_salary, now)
+            if elapsed < 86400:
+                remaining = 86400 - elapsed
+                hrs = int(remaining // 3600)
+                mins = int((remaining % 3600) // 60)
+                secs = int(remaining % 60)
+                time_str = f"**{hrs}h {mins}m**" if hrs > 0 else f"**{mins}m {secs}s**"
+                e_wait = warning_embed(
+                    "⏱️ Nómina Ya Cobrada",
+                    f"Hola {interaction.user.mention}, ya has recibido tu sueldo diario en las últimas 24 horas.\n\n"
+                    f"🏦 **Próxima nómina disponible en:** {time_str}\n"
+                    f"💡 *Recuerda que también puedes cobrar tu `/diario` o hacer reportes con `/trabajar`.*"
+                )
+                await interaction.followup.send(embed=e_wait, ephemeral=True)
+                return
+
+        # 1. Consultar departamentos donde trabaja el usuario
+        dept_rows = await aexecute(
+            """SELECT dm.rank, dm.salary, d.id as dept_id, d.name as dept_name, d.acronym, d.budget
+               FROM department_members dm
+               JOIN departments d ON d.id = dm.department_id
+               WHERE dm.discord_id = $1 AND dm.guild_id = $2 AND dm.salary > 0""",
+            (user_id, guild_id), fetch="all"
+        ) or []
+
+        # 2. Consultar empresas donde trabaja el usuario
+        comp_rows = await aexecute(
+            """SELECT cm.role, cm.salary, c.id as comp_id, c.name as company_name, c.funds
+               FROM company_members cm
+               JOIN companies c ON c.id = cm.company_id
+               WHERE cm.discord_id = $1 AND cm.guild_id = $2 AND cm.salary > 0""",
+            (user_id, guild_id), fetch="all"
+        ) or []
+
+        total_salary = 0
+        breakdown_items = []
+
+        # Procesar sueldos de departamentos
+        for d in dept_rows:
+            d_salary = int(d.get("salary", 0) or 0)
+            if d_salary <= 0:
+                continue
+            dept_budget = int(d.get("budget", 0) or 0)
+            paid_amount = d_salary
+            note = ""
+
+            if dept_budget >= d_salary:
+                await aexecute(
+                    "UPDATE departments SET budget = budget - $1, updated_at = NOW() WHERE id = $2",
+                    (d_salary, d["dept_id"])
+                )
+            else:
+                # Si el departamento tiene poco presupuesto, se cubre con presupuesto disponible + subsidio estatal
+                if dept_budget > 0:
+                    await aexecute("UPDATE departments SET budget = 0, updated_at = NOW() WHERE id = $1", (d["dept_id"],))
+                note = " *(Fondos de Tesorería Municipal)*"
+
+            total_salary += paid_amount
+            acronym_badge = f"[{d.get('acronym')}]" if d.get('acronym') else ""
+            breakdown_items.append(
+                f"🏛️ **{d['dept_name']} {acronym_badge}**\n"
+                f"└ Rango: `{d.get('rank', 'Oficial')}` • Salario: **{format_currency(paid_amount)}**{note}"
+            )
+
+        # Procesar sueldos de empresas privadas
+        for c in comp_rows:
+            c_salary = int(c.get("salary", 0) or 0)
+            if c_salary <= 0:
+                continue
+            funds = int(c.get("funds", 0) or 0)
+            if funds >= c_salary:
+                await aexecute(
+                    "UPDATE companies SET funds = funds - $1, updated_at = NOW() WHERE id = $2",
+                    (c_salary, c["comp_id"])
+                )
+                total_salary += c_salary
+                breakdown_items.append(
+                    f"🏢 **{c['company_name']}**\n"
+                    f"└ Cargo: `{c.get('role', 'Empleado')}` • Salario: **{format_currency(c_salary)}**"
+                )
+            elif funds > 0:
+                await aexecute("UPDATE companies SET funds = 0, updated_at = NOW() WHERE id = $1", (c["comp_id"],))
+                total_salary += funds
+                breakdown_items.append(
+                    f"🏢 **{c['company_name']}**\n"
+                    f"└ Cargo: `{c.get('role', 'Empleado')}` • Salario Parcial: **{format_currency(funds)}** *(Fondos de empresa limitados)*"
+                )
+            else:
+                breakdown_items.append(
+                    f"🏢 **{c['company_name']}**\n"
+                    f"└ Cargo: `{c.get('role', 'Empleado')}` • ⚠️ **$0** *(Empresa en quiebra sin fondos)*"
+                )
+
+        # Si no tiene ningún salario formal en agencias ni empresas, otorgar subsidio básico de empleo ciudadano
+        if total_salary <= 0:
+            config = await async_get_or_create_guild_config(guild_id)
+            base_subsidy = config.get("daily_amount", 500) or 500
+            total_salary = base_subsidy
+            breakdown_items.append(
+                f"🏙️ **Subsidio de Ciudadanía & Empleo Municipal**\n"
+                f"└ Remuneración base ciudadana: **{format_currency(base_subsidy)}** 💵\n"
+                f"💡 *Tip: Postúlate a un departamento oficial (`/departamento postular`) o ingresa a una empresa (`/empresa`) para ganar sueldos mayores.*"
+            )
+
+        # Actualizar último cobro y depositar en cuenta bancaria (Direct Deposit)
+        await aexecute(
+            "UPDATE users SET last_salary = $1, bank = bank + $2, updated_at = NOW() WHERE discord_id = $3 AND guild_id = $4",
+            (now, total_salary, user_id, guild_id)
+        )
+
+        # Registrar transacción
+        await async_log_transaction(
+            user_id, guild_id, "salary", total_salary,
+            f"Nómina salarial diaria: {len(dept_rows)} depts, {len(comp_rows)} comps"
+        )
+
+        # Otorgar XP de jornada laboral
+        xp_awarded = min(250, max(75, int(total_salary // 15)))
+        await add_xp(user_id, guild_id, xp_awarded, self.bot)
+
+        # Obtener balance bancario actualizado
+        updated_user = await async_get_or_create_user(user_id, guild_id)
+        new_bank = updated_user.get("bank", 0) or 0
+
+        # Crear Embed de Nómina
+        emb = economy_embed(f"💼 Nómina Salarial Cobrada • {interaction.user.display_name}")
+        emb.set_thumbnail(url=interaction.user.display_avatar.url)
+        emb.description = (
+            f"¡Tu sueldo diario ha sido liquidado y transferido exitosamente a tu **cuenta bancaria**!\n\n"
+            + "\n\n".join(breakdown_items)
+        )
+        emb.add_field(name="💵 Salario Neto Cobrado", value=f"**+{format_currency(total_salary)}**", inline=True)
+        emb.add_field(name="🏦 Nuevo Saldo en Banco", value=f"**{format_currency(new_bank)}**", inline=True)
+        emb.add_field(name="⭐ Experiencia Obtenida", value=f"**+{xp_awarded} XP**", inline=True)
+        emb.set_footer(text="Miami Vice RP • Sueldo cobrado por 24 horas • Vuelve mañana para tu próxima nómina")
+
+        await interaction.followup.send(embed=emb)
+
+    @app_commands.command(name="sueldo", description="Cobrar tu sueldo diario de tu departamento, empresa o empleo público")
+    async def sueldo(self, interaction: discord.Interaction):
+        """Reclamar la nómina diaria acumulada por tu empleo o puesto oficial."""
+        await self._handle_salary_claim(interaction)
+
+    @app_commands.command(name="salario", description="Cobrar tu sueldo diario (alias de /sueldo)")
+    async def salario(self, interaction: discord.Interaction):
+        """Alias para cobrar la nómina salarial diaria."""
+        await self._handle_salary_claim(interaction)
+
     @app_commands.command(name="semanal", description="Reclamar tu recompensa semanal")
     async def semanal(self, interaction: discord.Interaction):
         await interaction.response.defer()

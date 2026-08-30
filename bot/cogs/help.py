@@ -10,6 +10,7 @@ HELP_CATEGORIES = {
         "label": "Economía & Trabajos",
         "commands": [
             ("/balance [usuario]", "Ver tu saldo de efectivo y banco"),
+            ("/sueldo", "Cobrar tu sueldo diario de tu departamento, empresa o empleo público"),
             ("/trabajar", "Enviar reporte/evidencia de trabajo secundario para revisión de admins"),
             ("/trabajo mis_trabajos", "Ver el estado de tus evidencias de trabajo enviadas"),
             ("/trabajo pendientes", "Ver reportes de trabajo pendientes de revisión (Admin)"),

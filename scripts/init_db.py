@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_daily TIMESTAMP,
     last_weekly TIMESTAMP,
     last_work TIMESTAMP,
+    last_salary TIMESTAMP,
     username TEXT,
     display_name TEXT,
     profile_note TEXT DEFAULT 'Made By Joshi',
@@ -636,13 +637,17 @@ def _ensure_profile_note():
     try:
         if USE_POSTGRES:
             execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
+            execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_salary TIMESTAMP")
             execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
             execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
             execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
         else:
             u_cols = execute("PRAGMA table_info(users)", fetch="all") or []
-            if not any(column.get("name") == "profile_note" for column in u_cols):
+            u_names = [column.get("name") for column in u_cols]
+            if "profile_note" not in u_names:
                 execute("ALTER TABLE users ADD COLUMN profile_note TEXT DEFAULT 'Made By Joshi'")
+            if "last_salary" not in u_names:
+                execute("ALTER TABLE users ADD COLUMN last_salary TIMESTAMP")
             
             g_cols = execute("PRAGMA table_info(guild_config)", fetch="all") or []
             g_names = [col.get("name") for col in g_cols]

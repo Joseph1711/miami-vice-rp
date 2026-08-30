@@ -2440,6 +2440,26 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
     }
   },
   {
+    "command": "/sueldo",
+    "category": "Economía y Trabajos",
+    "cog": "economy",
+    "description": "Cobrar tu sueldo diario acumulado por tus puestos en departamentos, empresas o empleo público",
+    "beforeBehavior": {
+      "state": "infinite_loading",
+      "log": "[ERROR] Comando no registrado en el árbol de comandos slash",
+      "discordStatus": "⏳ \"Miami Vice Bot está pensando...\"",
+      "timeElapsed": "∞ (Timeout Discord)"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Liquidación de nómina ejecutada -> Consulta de depts y empresas -> Depósito bancario procesado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "35 ms",
+      "embedTitle": "💼 Nómina Salarial Cobrada • Ciudadano",
+      "embedContent": "¡Tu sueldo diario ha sido liquidado y transferido exitosamente a tu **cuenta bancaria**!\n\n🏛️ **Miami Police Department [MPD]**\n└ Rango: `Oficial I` • Salario: **$1,500**\n\n💵 **Salario Neto:** +$1,500 | 🏦 **Nuevo Saldo:** $12,400 | ⭐ **+100 XP**"
+    }
+  },
+  {
     "command": "/trabajar",
     "category": "Economía y Trabajos",
     "cog": "economy",
