@@ -24,12 +24,23 @@ HELP_CATEGORIES = {
     },
     "dni": {
         "emoji": "🪪",
-        "label": "Documento de Identidad (DNI)",
+        "label": "Documento de Identidad & Multiroles",
         "commands": [
-            ("/dni crear", "Tramitar tu DNI con datos de tu personaje IC y generar ID único"),
-            ("/dni ver [usuario]", "Ver el documento de identidad oficial de un ciudadano"),
+            ("/dni crear", "Tramitar tu DNI IC con foto de perfil de Roblox sincronizada (hasta 5 personajes)"),
+            ("/dni mis_personajes", "Ver tus hasta 5 personajes registrados y alternar tu personaje activo"),
+            ("/dni ver [usuario] [numero_dni]", "Ver el documento de identidad oficial con avatar de Roblox"),
             ("/dni buscar numero_dni", "Buscar a un ciudadano por su número de DNI único (ej: MIA-123456)"),
             ("/dni revocar @usuario motivo", "Revocar o anular el DNI de un ciudadano (Admin/Policía)"),
+        ]
+    },
+    "policia": {
+        "emoji": "👮",
+        "label": "Policía & Seguridad Pública",
+        "commands": [
+            ("/policia arrestar @ciudadano motivo [tiempo] [fianza]", "Arrestar y procesar judicialmente a un infractor"),
+            ("/policia multar @ciudadano monto motivo", "Emitir y cobrar una multa/infracción a un ciudadano"),
+            ("/policia antecedentes @ciudadano", "Consultar el historial delictivo, multas y arrestos de un usuario"),
+            ("/policia configurar_roles roles", "Configurar roles de Discord autorizados para usar comandos policiales (Admin)"),
         ]
     },
     "armas": {
@@ -138,11 +149,14 @@ HELP_CATEGORIES = {
     },
     "tickets": {
         "emoji": "🎫",
-        "label": "Tickets & Soporte",
+        "label": "Tickets & Verificación",
         "commands": [
-            ("/ticket abrir", "Abrir ticket de soporte privado"),
-            ("/ticket cerrar", "Cerrar ticket actual"),
-            ("/verificar estado", "Ver tu estado de verificación"),
+            ("/ticket panel [canal] [categoria] [rol]", "Publicar panel interactivo en el canal y categoría seleccionados"),
+            ("/ticket abrir", "Abrir un ticket llenando el formulario/modal interactivo obligatorio"),
+            ("/ticket cerrar", "Cerrar el ticket actual"),
+            ("/verificar panel [canal]", "Publicar panel oficial de verificación con conexión a Roblox"),
+            ("/verificar configurar [roles_otorgar] [roles_retirar]", "Configurar roles a dar y retirar automáticamente"),
+            ("/verificar estado [usuario]", "Consultar estado de verificación y Roblox vinculado"),
         ]
     },
     "actualizaciones": {

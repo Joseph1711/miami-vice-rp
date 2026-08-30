@@ -2758,5 +2758,125 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "🌴 Miami Vice RP — Comunicado Oficial de Apertura",
       "embedContent": "Nos complace anunciar la gran apertura de la nueva temporada de **Miami Vice Roleplay**.\n\n✨ **Novedades Principales:**\n• Nuevos sistemas de registro vehicular, trailers y cuatrimotos\n• Central policial CAD/911 con órdenes B.O.L.O. y expedientes penales\n• Economía refinada y banco de inversiones\n\n¡Los esperamos en las calles de Vice City!"
     }
+  },
+  {
+    "command": "/verificar panel",
+    "category": "Verificación & Roblox",
+    "cog": "verification",
+    "description": "Publica el panel interactivo que otorga y retira roles configurados, vinculando automáticamente Roblox con foto de avatar",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] No soportaba múltiples roles a dar/quitar ni avatar de Roblox",
+      "discordStatus": "❌ No disponible",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Panel publicado en #verificacion -> Roles a otorgar: @Ciudadano, @Verificado -> Roles a retirar: @NoVerificado -> Conexión con Roblox API activada.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "18 ms",
+      "embedTitle": "🛡️ Panel de Verificación Oficial & Roles",
+      "embedContent": "Presiona el botón **'Verificarme'** para ingresar tu usuario de Roblox y edad OOC.\n\n✨ **Efectos automáticos:**\n• Otorgamiento de roles seleccionados (@Ciudadano, @Miembro)\n• Retiro de roles no deseados (@NoVerificado)\n• Conexión con API de Roblox y descarga de foto de perfil 3D\n• Sincronización automática con todos tus DNIs"
+    }
+  },
+  {
+    "command": "/dni mis_personajes",
+    "category": "DNI & Multiroles",
+    "cog": "dni",
+    "description": "Gestionar y alternar entre hasta 5 personajes con DNI único y avatar de Roblox",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Solo permitía 1 solo DNI por usuario",
+      "discordStatus": "❌ 1 personaje max",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] 2 personajes encontrados para usuario -> Menú interactivo generado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "14 ms",
+      "embedTitle": "🪪 Tus Personajes Registrados (2/5)",
+      "embedContent": "Selecciona el personaje que deseas activar como tu identidad principal:\n\n#1 **Alejandro Morales Ruiz** [🟢 ACTIVO]\n• DNI: `MIA-738201` • Edad: 27 años • Ocupación: Oficial de Policía\n• Roblox: `Joshi_Dev` (Avatar 3D sincronizado)\n\n#2 **Marcus 'Viper' Vance**\n• DNI: `MIA-920184` • Edad: 31 años • Ocupación: Mecánico / Corredor\n• Roblox: `Joshi_Dev` (Avatar 3D sincronizado)"
+    }
+  },
+  {
+    "command": "/policia arrestar",
+    "category": "Policía y Seguridad",
+    "cog": "police",
+    "description": "Arrestar a un infractor con condena, fianza y registro judicial (solo roles policiales configurados)",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /policia no existía",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Oficial @Capitan_Miller ejecutó arresto sobre @Sospechoso -> Grabado en criminal_records.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "22 ms",
+      "embedTitle": "🚨 INFORME OFICIAL DE ARRESTO & DETENCIÓN",
+      "embedContent": "El oficial @Capitan_Miller ha procesado formalmente la detención:\n\n👤 **Sospechoso:** @Tommy_Vance (`Tommy`)\n🪪 **Nombre IC / DNI:** **Tommy Vance** (`MIA-583920`)\n👮 **Oficial a Cargo:** @Capitan_Miller\n⚖️ **Cargos:** Conducción temeraria, posesión de arma sin licencia y desacato a la autoridad\n⏳ **Condena:** 30 minutos de prisión preventiva\n💵 **Fianza Fijada:** `$5,000.00`"
+    }
+  },
+  {
+    "command": "/policia multar",
+    "category": "Policía y Seguridad",
+    "cog": "police",
+    "description": "Emitir y descontar una multa de tránsito o infracción a un ciudadano (solo roles policiales)",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /policia multar no existía",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Multa de $750 cobrada automáticamente a infractor @Ciudadano.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "19 ms",
+      "embedTitle": "📄 BOLETA OFICIAL DE INFRACCIÓN / MULTA",
+      "embedContent": "Se ha extendido una sanción económica oficial a @Ciudadano:\n\n👤 **Infractor:** @Ciudadano (`MIA-482910`)\n👮 **Oficial Emisor:** @Oficial_Gomez\n💵 **Monto:** `$750.00`\n💳 **Estado:** 🟢 Descontada de su saldo al instante.\n📝 **Infracción:** Exceso de velocidad en zona escolar y giro indebido en U."
+    }
+  },
+  {
+    "command": "/policia antecedentes",
+    "category": "Policía y Seguridad",
+    "cog": "police",
+    "description": "Consultar historial delictivo completo, arrestos y multas de un ciudadano (solo roles policiales)",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /policia antecedentes no existía",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Consulta de expediente criminal para @Sospechoso -> 2 registros encontrados.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "16 ms",
+      "embedTitle": "📁 EXPEDIENTE POLICIAL & ANTECEDENTES — Tommy Vance",
+      "embedContent": "Se encontraron **2 registros** en la base de datos penal:\n\n#1 [2026-08-30] **Arresto Policial** (Cárcel: 30m, Fianza: $5,000.00)\n• Motivo: Conducción temeraria y desacato\n• Oficial: `Capitan_Miller`\n\n#2 [2026-08-28] **Multa / Infracción** (Multa: $750.00)\n• Motivo: Exceso de velocidad\n• Oficial: `Oficial_Gomez`"
+    }
+  },
+  {
+    "command": "/ticket panel",
+    "category": "Tickets & Soporte",
+    "cog": "tickets",
+    "description": "Publicar el panel de tickets en el canal y categoría escogidos, requiriendo modal descriptivo al abrir",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] No permitía escoger canal/categoría personalizada ni abría modal",
+      "discordStatus": "❌ Incompleto",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Panel publicado en #soporte -> Categoría de tickets: '📁 TICKETS' -> Rol soporte: @Staff -> Modal interactivo habilitado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "17 ms",
+      "embedTitle": "🎫 Centro de Atención & Soporte",
+      "embedContent": "Presiona el botón **'Abrir Ticket'** para contactar con el Staff.\n\n📝 **Requisito:** Al hacer clic, se abre un formulario (modal) solicitando:\n1. ¿Qué necesitas? (Dudas, reporte, compras, bugs...)\n2. ¿Por qué abres este ticket? (Explicación detallada)"
+    }
   }
 ];

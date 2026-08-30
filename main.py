@@ -63,6 +63,7 @@ COGS = [
     "bot.cogs.cases",
     "bot.cogs.incidents",
     "bot.cogs.announcements",
+    "bot.cogs.police",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]
