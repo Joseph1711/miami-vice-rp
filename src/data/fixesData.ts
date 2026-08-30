@@ -2598,5 +2598,25 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "🐙 Nuevos Cambios Reales Detectados de GitHub",
       "embedContent": "• Repositorio: `Joseph1711/miami-vice-rp`\n• Último Commit: `a8f3b21`\n• Cambios detectados: 4\n\n*Borrador listo para publicar con `/update publicar` o ver con `/update preview`.*"
     }
+  },
+  {
+    "command": "/help",
+    "category": "Ayuda y Comandos",
+    "cog": "help",
+    "description": "Centro interactivo de ayuda con menú desplegable de categorías y catálogo de comandos actualizado",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] El comando previo /ayuda requería migración a /help y carecía de las nuevas categorías DNI, Balística, Roblox y Updates",
+      "discordStatus": "❌ Comando /help no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] /help invocado -> Generado menú interactivo HelpCategorySelect con 12 categorías y +80 comandos registrados.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "22 ms",
+      "embedTitle": "🌴 Miami Vice RP — Centro de Comandos",
+      "embedContent": "Bienvenido al sistema integral de Roleplay para **Miami Vice**.\n\nCategorías disponibles:\n• 💰 Economía & Trabajos (11 comandos)\n• 🪪 Documento de Identidad (4 comandos)\n• 🔫 Registro Balístico de Armas (5 comandos)\n• 🎮 Conexión a Roblox (3 comandos)\n• 🏛️ Departamentos Oficiales (10 comandos)\n• 🏦 Banco & Inversiones (8 comandos)\n• 🛒 Tienda & Mercados (8 comandos)\n• 🏢 Empresas & Propiedades (8 comandos)\n• 🕶️ Crimen & Bajos Fondos (6 comandos)\n• 🎫 Tickets & Soporte (3 comandos)\n• 📢 Anuncios de Actualizaciones (7 comandos)\n• ⚙️ Administración (10 comandos)\n\n*Selecciona una categoría en el menú desplegable para ver detalles.*"
+    }
   }
 ];

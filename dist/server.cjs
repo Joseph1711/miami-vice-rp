@@ -132,6 +132,10 @@ app.get("/api/bot/status", (req, res) => {
     "bot.cogs.social",
     "bot.cogs.tickets",
     "bot.cogs.verification",
+    "bot.cogs.dni",
+    "bot.cogs.weapons",
+    "bot.cogs.roblox",
+    "bot.cogs.updates",
     "bot.cogs.admin",
     "bot.cogs.help"
   ];
@@ -350,7 +354,9 @@ try:
         "jobs": ("tickets_contracts", "Cat\xE1logo de empleos legales"),
         "level_rewards": ("tickets_contracts", "Recompensas por nivel alcanzado"),
         "auto_roles": ("tickets_contracts", "Asignaci\xF3n autom\xE1tica de roles"),
-        "temp_roles": ("tickets_contracts", "Roles temporales con vencimiento")
+        "temp_roles": ("tickets_contracts", "Roles temporales con vencimiento"),
+        "bot_updates_config": ("users_config", "Configuraci\xF3n de canales y GitHub para anuncios de actualizaciones"),
+        "bot_updates_history": ("users_config", "Registro hist\xF3rico de actualizaciones oficiales publicadas")
     }
 
     for t in tables:

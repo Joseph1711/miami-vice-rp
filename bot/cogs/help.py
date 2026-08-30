@@ -204,7 +204,7 @@ class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 
-    @app_commands.command(name="ayuda", description="Centro de ayuda y lista interactiva de comandos del bot")
+    @app_commands.command(name="help", description="Centro de ayuda y lista interactiva de comandos del bot")
     @app_commands.describe(categoria="Categoría opcional a consultar")
     @app_commands.choices(categoria=[
         app_commands.Choice(name="💰 Economía & Trabajos", value="economia"),
@@ -216,10 +216,11 @@ class Help(commands.Cog):
         app_commands.Choice(name="🛒 Tienda & Mercados", value="mercado"),
         app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
         app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
+        app_commands.Choice(name="🎫 Tickets & Soporte", value="tickets"),
         app_commands.Choice(name="📢 Anuncios de Actualizaciones", value="actualizaciones"),
         app_commands.Choice(name="⚙️ Administración", value="admin"),
     ])
-    async def ayuda(self, interaction: discord.Interaction, categoria: str = None):
+    async def help(self, interaction: discord.Interaction, categoria: str = None):
         if categoria and categoria in HELP_CATEGORIES:
             cat_data = HELP_CATEGORIES[categoria]
             e = info_embed(
