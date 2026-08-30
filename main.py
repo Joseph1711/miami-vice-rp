@@ -57,6 +57,7 @@ COGS = [
     "bot.cogs.dni",
     "bot.cogs.weapons",
     "bot.cogs.roblox",
+    "bot.cogs.updates",
     "bot.cogs.admin",
     "bot.cogs.help",
 ]

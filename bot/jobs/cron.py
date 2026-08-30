@@ -216,6 +216,99 @@ def setup_jobs(bot):
         except Exception as e:
             logger.error(f"Vehicle repair job error: {e}")
 
+    @scheduler.scheduled_job("interval", minutes=15)
+    async def check_github_updates():
+        try:
+            from bot.services.updates import (
+                fetch_github_commits,
+                extract_real_changes_from_commits,
+                build_announcement_text,
+                build_announcement_embed,
+                async_save_update_history,
+                async_save_updates_config,
+                async_is_update_duplicate,
+                DEFAULT_REPO
+            )
+
+            # Buscar servidores con canal configurado y auto_github_enabled=True
+            configs = await aexecute(
+                """SELECT * FROM bot_updates_config 
+                   WHERE channel_id IS NOT NULL AND auto_github_enabled=true""",
+                fetch="all"
+            ) or []
+
+            if not configs:
+                return
+
+            for cfg in configs:
+                gid = cfg["guild_id"]
+                repo_name = cfg.get("github_repo") or DEFAULT_REPO
+                last_sha = cfg.get("last_commit_sha")
+                channel_id = cfg.get("channel_id")
+
+                commits = await fetch_github_commits(repo=repo_name, limit=5)
+                if not commits:
+                    continue
+
+                real_changes, latest_sha, commit_date = extract_real_changes_from_commits(commits)
+                if not latest_sha or latest_sha == last_sha:
+                    continue
+
+                # Si es la primera vez que se configura y no había last_sha, inicializarlo para no spammear
+                if not last_sha:
+                    await async_save_updates_config(gid, last_commit_sha=latest_sha)
+                    logger.info(f"[Updates] SHA inicial registrado para guild {gid}: {latest_sha[:7]}")
+                    continue
+
+                # Comprobar duplicados
+                if await async_is_update_duplicate(gid, commit_sha=latest_sha):
+                    await async_save_updates_config(gid, last_commit_sha=latest_sha)
+                    continue
+
+                short_sha = latest_sha[:7]
+                auto_ver = f"v1.{len(commits)}.{short_sha}"
+                date_str = commit_date or datetime.datetime.utcnow().strftime("%d/%m/%Y")
+                changes_text = "\n".join([f"• {c}" for c in real_changes])
+
+                # Obtener canal
+                guild = bot.get_guild(int(gid))
+                if not guild:
+                    continue
+
+                channel = guild.get_channel(int(channel_id))
+                if not channel:
+                    try:
+                        channel = await bot.fetch_channel(int(channel_id))
+                    except Exception:
+                        continue
+
+                if not channel:
+                    continue
+
+                # Publicar anuncio en el canal con personalidad del bot
+                full_text = build_announcement_text(auto_ver, changes_text, date_str)
+                sent_msg = await channel.send(content=full_text)
+
+                # Registrar en historial
+                await async_save_update_history(
+                    guild_id=gid,
+                    version=auto_ver,
+                    title=f"Actualización Automática {auto_ver}",
+                    raw_message=full_text,
+                    changes=changes_text,
+                    source="github_auto",
+                    commit_sha=latest_sha,
+                    channel_id=str(channel.id),
+                    message_id=str(sent_msg.id),
+                    published_by="GITHUB_WATCHDOG"
+                )
+
+                # Actualizar SHA
+                await async_save_updates_config(gid, last_commit_sha=latest_sha)
+                logger.info(f"[Updates] Anuncio automático publicado en {channel.name} ({auto_ver})")
+        except Exception as e:
+            logger.error(f"GitHub updates cron job error: {e}")
+
     scheduler.start()
     logger.info("Cron jobs started")
     return scheduler

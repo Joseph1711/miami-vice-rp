@@ -563,6 +563,40 @@ CREATE TABLE IF NOT EXISTS weapon_registries (
 );
 
 -- =====================
+-- BOT UPDATES & ANNOUNCEMENTS
+-- =====================
+CREATE TABLE IF NOT EXISTS bot_updates_config (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT UNIQUE NOT NULL,
+    channel_id TEXT,
+    github_repo TEXT DEFAULT 'Joseph1711/miami-vice-rp',
+    auto_github_enabled BOOLEAN DEFAULT TRUE,
+    last_commit_sha TEXT,
+    draft_version TEXT DEFAULT 'v1.4.0',
+    draft_changes TEXT,
+    draft_description TEXT,
+    draft_date TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bot_updates_history (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    title TEXT NOT NULL,
+    raw_message TEXT NOT NULL,
+    changes TEXT NOT NULL,
+    source TEXT DEFAULT 'manual',
+    commit_sha TEXT,
+    channel_id TEXT,
+    message_id TEXT,
+    published_by TEXT,
+    published_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
 -- DB INITIALIZATION STATE
 -- =====================
 CREATE TABLE IF NOT EXISTS db_state (

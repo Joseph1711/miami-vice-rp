@@ -2538,5 +2538,65 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "⚙️ Canal de Postulaciones Configurado",
       "embedContent": "Las solicitudes de ingreso a departamentos se enviarán al canal designado."
     }
+  },
+  {
+    "command": "/update preview",
+    "category": "Anuncios de Actualizaciones",
+    "cog": "updates",
+    "description": "Generar vista previa del anuncio con la personalidad sarcástica y ligeramente vulgar del bot",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /update no existía en el bot",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Borrador de actualización v1.4.0 formateado con personalidad auténtica -> Vista previa y botones interactivos generados.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "18 ms",
+      "embedTitle": "🚨 CABRONES, ME ACTUALIZARON OTRA VEZ.",
+      "embedContent": "Sí, sigo vivo.\n\nDespués de una puta semana de código, bugs, errores y desarrolladores preguntándose por qué coño algo dejó de funcionar, finalmente tengo una nueva actualización.\n\n🔧 **¿QUÉ CAMBIÓ?**\n• Sistema de DNI oficial con número único y estado\n• Registro balístico de armas con series generadas\n• Integración directa con perfiles de Roblox y avatar 3D\n• Sistema automático de anuncios de actualizaciones con detección de GitHub\n\n📦 **VERSIÓN**\n\"v1.4.0\"\n\n📅 **FECHA**\n29/08/2026\n\n«Si algo deja de funcionar después de esta actualización... yo no fui. 💀»\n\n— *Miami Vice RP Bot*"
+    }
+  },
+  {
+    "command": "/update canal",
+    "category": "Anuncios de Actualizaciones",
+    "cog": "updates",
+    "description": "Configurar el canal oficial donde el bot publicará los anuncios de actualización",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando no disponible",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] UPDATE bot_updates_config SET channel_id=$1 WHERE guild_id=$2 ejecutado en 12ms.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "15 ms",
+      "embedTitle": "📢 Canal de Actualizaciones Configurado",
+      "embedContent": "A partir de ahora, todos los anuncios de actualización del bot se publicarán en **#anuncios-bot**."
+    }
+  },
+  {
+    "command": "/update github_check",
+    "category": "Anuncios de Actualizaciones",
+    "cog": "updates",
+    "description": "Detectar commits reales de GitHub y generar el anuncio dinámicamente sin inventar cambios",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Sin integración de GitHub API",
+      "discordStatus": "❌ Comando no encontrado",
+      "timeElapsed": "0 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] GitHub API https://api.github.com/repos/Joseph1711/miami-vice-rp/commits consultado -> 4 cambios reales extraídos -> Borrador preparado.",
+      "discordStatus": "✅ Ejecución completada",
+      "timeElapsed": "120 ms",
+      "embedTitle": "🐙 Nuevos Cambios Reales Detectados de GitHub",
+      "embedContent": "• Repositorio: `Joseph1711/miami-vice-rp`\n• Último Commit: `a8f3b21`\n• Cambios detectados: 4\n\n*Borrador listo para publicar con `/update publicar` o ver con `/update preview`.*"
+    }
   }
 ];

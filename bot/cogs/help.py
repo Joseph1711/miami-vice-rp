@@ -131,6 +131,19 @@ HELP_CATEGORIES = {
             ("/verificar estado", "Ver tu estado de verificación"),
         ]
     },
+    "actualizaciones": {
+        "emoji": "📢",
+        "label": "Anuncios de Actualizaciones",
+        "commands": [
+            ("/update canal #canal", "Configurar canal oficial donde se publicarán los anuncios"),
+            ("/update configurar [version] [cambios]", "Configurar versión y lista de cambios reales a anunciar"),
+            ("/update preview", "Ver el anuncio con la personalidad sarcástica y auténtica del bot"),
+            ("/update publicar [canal] [forzar]", "Publicar el anuncio en el canal configurado"),
+            ("/update historial [limite]", "Consultar el historial de actualizaciones publicadas"),
+            ("/update github_check [repo] [publicar]", "Detectar commits reales de GitHub y generar anuncio"),
+            ("/update github_config activar_auto repo", "Configurar detección automática de GitHub cada 15 min"),
+        ]
+    },
     "admin": {
         "emoji": "⚙️",
         "label": "Administración del Servidor",
@@ -203,6 +216,7 @@ class Help(commands.Cog):
         app_commands.Choice(name="🛒 Tienda & Mercados", value="mercado"),
         app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
         app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
+        app_commands.Choice(name="📢 Anuncios de Actualizaciones", value="actualizaciones"),
         app_commands.Choice(name="⚙️ Administración", value="admin"),
     ])
     async def ayuda(self, interaction: discord.Interaction, categoria: str = None):
