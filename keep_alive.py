@@ -263,6 +263,23 @@ def api_bot_restart():
     return jsonify({"success": True, "message": "Bot reiniciado."})
 
 
+@app.route("/api/bot/reset-clean", methods=["POST"])
+def api_bot_reset_clean():
+    payload = request.get_json(silent=True) or {}
+    wipe_db = payload.get("wipeDb", False)
+    _control_bot("stop")
+    if wipe_db:
+        db_file = Path(__file__).resolve().parent / "miami_vice.sqlite3"
+        if db_file.exists():
+            try:
+                db_file.unlink()
+            except Exception:
+                pass
+    time.sleep(1)
+    _control_bot("start")
+    return jsonify({"success": True, "message": "Reinicio limpio ejecutado."})
+
+
 @app.route("/api/bot/logs")
 def api_bot_logs():
     bot = _bot_ref
@@ -285,6 +302,66 @@ def api_bot_logs_clear():
     return jsonify({"success": True})
 
 
+@app.route("/api/bot/files")
+def api_bot_files():
+    base_dir = Path(__file__).resolve().parent
+    results = []
+    
+    root_files = ["main.py", "keep_alive.py", "requirements.txt", "test_database.py"]
+    for f in root_files:
+        p = base_dir / f
+        if p.exists():
+            results.append({"path": f, "name": f, "type": "file", "size": p.stat().st_size})
+
+    bot_dir = base_dir / "bot"
+    if bot_dir.exists():
+        for root, dirs, files in os.walk(bot_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+            rel_root = os.path.relpath(root, base_dir)
+            if rel_root != ".":
+                results.append({"path": rel_root.replace("\\", "/"), "name": os.path.basename(root), "type": "dir"})
+            for file in sorted(files):
+                if file.endswith(".py") or file.endswith(".sql") or file.endswith(".json"):
+                    full_p = os.path.join(root, file)
+                    rel_p = os.path.relpath(full_p, base_dir).replace("\\", "/")
+                    results.append({"path": rel_p, "name": file, "type": "file", "size": os.path.getsize(full_p)})
+
+    return jsonify({"files": results})
+
+
+@app.route("/api/bot/file-content")
+def api_bot_file_content():
+    target_rel = request.args.get("path", "")
+    if not target_rel or ".." in target_rel:
+        return jsonify({"error": "Ruta de archivo inválida"}), 400
+    base_dir = Path(__file__).resolve().parent
+    target_path = base_dir / target_rel
+    if not target_path.exists() or not target_path.is_file():
+        return jsonify({"error": "Archivo no encontrado"}), 404
+    try:
+        content = target_path.read_text(encoding="utf-8")
+        return jsonify({"path": target_rel, "content": content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/bot/save-file", methods=["POST"])
+def api_bot_save_file():
+    payload = request.get_json(silent=True) or {}
+    target_rel = payload.get("path", "")
+    content = payload.get("content", "")
+    if not target_rel or ".." in target_rel:
+        return jsonify({"error": "Ruta inválida"}), 400
+    base_dir = Path(__file__).resolve().parent
+    target_path = base_dir / target_rel
+    try:
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(content, encoding="utf-8")
+        return jsonify({"success": True, "message": "Archivo guardado exitosamente."})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/database/stats")
 def api_database_stats():
     try:
@@ -298,11 +375,45 @@ def api_database_stats():
         tables_list = [r["name"] for r in tables_rows] if tables_rows else []
         table_stats = []
         total_rows = 0
+
+        CATEGORY_MAP = {
+            "users": ("users_config", "Cuentas bancarias y perfiles"),
+            "transactions": ("economy_banking", "Historial de transferencias"),
+            "savings_accounts": ("economy_banking", "Cuentas de ahorro"),
+            "investments": ("economy_banking", "Portafolios de inversión"),
+            "loans": ("economy_banking", "Créditos bancarios activos"),
+            "treasury": ("economy_banking", "Fondos de tesorería municipal"),
+            "companies": ("companies_props", "Empresas registradas"),
+            "properties": ("companies_props", "Inmuebles y propiedades"),
+            "departments": ("departments_fleet", "Agencias gubernamentales"),
+            "fleet_vehicles": ("departments_fleet", "Vehículos de flota"),
+            "drug_operations": ("crime_night", "Operaciones de sustancias"),
+            "criminal_missions": ("crime_night", "Misiones de crimen organizado"),
+            "money_laundering": ("crime_night", "Contratos de lavado"),
+            "marketplace_listings": ("market_inventory", "Publicaciones activas"),
+            "user_inventory": ("market_inventory", "Mochila e ítems de usuarios"),
+            "tickets": ("tickets_contracts", "Tickets de soporte y reportes"),
+            "contracts": ("tickets_contracts", "Contratos laborales y privados"),
+            "applications": ("tickets_contracts", "Postulaciones a agencias"),
+        }
+
         for t in tables_list:
             try:
                 cnt = _safe_count(t)
-                table_stats.append({"name": t, "count": cnt})
                 total_rows += cnt
+                if is_postgres():
+                    cols_res = _safe_query(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{t}'")
+                else:
+                    cols_res = _safe_query(f'PRAGMA table_info("{t}")')
+                cols_cnt = len(cols_res) if cols_res else 0
+                cat, desc = CATEGORY_MAP.get(t, ("other", "Tabla del sistema"))
+                table_stats.append({
+                    "name": t,
+                    "count": cnt,
+                    "columnsCount": cols_cnt,
+                    "category": cat,
+                    "description": desc,
+                })
             except Exception:
                 pass
 
@@ -333,14 +444,142 @@ def api_database_stats():
         })
 
 
+@app.route("/api/database/table-schema")
+def api_database_table_schema():
+    table_name = request.args.get("table", "users")
+    if not table_name.replace("_", "").isalnum():
+        return jsonify({"error": "Nombre de tabla inválido"}), 400
+    try:
+        from bot.db import is_postgres
+        if is_postgres():
+            rows = _safe_query(f"""
+                SELECT column_name as name, data_type as type,
+                       (CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END) as notnull,
+                       column_default as dflt_value, 0 as pk
+                FROM information_schema.columns
+                WHERE table_name = '{table_name}'
+                ORDER BY ordinal_position
+            """)
+        else:
+            rows = _safe_query(f'PRAGMA table_info("{table_name}")')
+        return jsonify({"columns": rows, "table": table_name})
+    except Exception as e:
+        return jsonify({"error": str(e), "columns": [], "table": table_name})
+
+
 @app.route("/api/database/table-data")
 def api_database_table_data():
     table_name = request.args.get("table", "users")
-    limit = min(int(request.args.get("limit", 50)), 100)
+    limit = min(int(request.args.get("limit", 50)), 1000)
+    page = max(int(request.args.get("page", 1)), 1)
+    offset = (page - 1) * limit
+    sort_by = request.args.get("sortBy", "")
+    sort_order = "DESC" if request.args.get("sortOrder", "").lower() == "desc" else "ASC"
+
     if not table_name.replace("_", "").isalnum():
         return jsonify({"error": "Nombre de tabla inválido"}), 400
-    rows = _safe_query(f'SELECT * FROM "{table_name}" LIMIT {limit}')
-    return jsonify({"rows": rows, "count": len(rows)})
+
+    try:
+        from bot.db import is_postgres
+        if is_postgres():
+            cols_meta = _safe_query(f"""
+                SELECT column_name as name, data_type as type,
+                       (CASE WHEN is_nullable = 'NO' THEN 1 ELSE 0 END) as notnull,
+                       column_default as dflt_value, 0 as pk
+                FROM information_schema.columns
+                WHERE table_name = '{table_name}'
+                ORDER BY ordinal_position
+            """)
+        else:
+            cols_meta = _safe_query(f'PRAGMA table_info("{table_name}")')
+
+        columns = [c["name"] for c in cols_meta] if cols_meta else []
+        cnt_res = _safe_query(f'SELECT COUNT(*) as c FROM "{table_name}"')
+        total_count = int(cnt_res[0]["c"]) if cnt_res else 0
+
+        order_clause = ""
+        if sort_by and sort_by in columns:
+            order_clause = f'ORDER BY "{sort_by}" {sort_order}'
+        elif "created_at" in columns:
+            order_clause = "ORDER BY created_at DESC"
+        elif "id" in columns:
+            order_clause = "ORDER BY id ASC"
+
+        query = f'SELECT * FROM "{table_name}" {order_clause} LIMIT {limit} OFFSET {offset}'
+        rows = _safe_query(query)
+        total_pages = max(1, (total_count + limit - 1) // limit) if limit > 0 else 1
+
+        return jsonify({
+            "table": table_name,
+            "columns": cols_meta,
+            "rows": rows,
+            "count": len(rows),
+            "totalCount": total_count,
+            "page": page,
+            "limit": limit,
+            "totalPages": total_pages,
+        })
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "table": table_name,
+            "columns": [],
+            "rows": [],
+            "count": 0,
+            "totalCount": 0,
+            "page": 1,
+            "limit": limit,
+            "totalPages": 1,
+        })
+
+
+@app.route("/api/database/query", methods=["POST"])
+def api_database_query():
+    payload = request.get_json(silent=True) or {}
+    sql = payload.get("sql", "").strip()
+    if not sql:
+        return jsonify({"error": "Consulta SQL no proporcionada"}), 400
+    if not sql.upper().startswith(("SELECT", "PRAGMA", "EXPLAIN", "SHOW")):
+        return jsonify({"error": "Por seguridad, la consola web solo permite consultas de lectura (SELECT, PRAGMA, EXPLAIN)."}), 403
+    try:
+        t0 = time.time()
+        rows = _safe_query(sql)
+        elapsed_ms = round((time.time() - t0) * 1000, 2)
+        columns = list(rows[0].keys()) if rows and isinstance(rows[0], dict) else []
+        return jsonify({
+            "success": True,
+            "columns": columns,
+            "rows": rows,
+            "rowCount": len(rows),
+            "executionTimeMs": elapsed_ms,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "columns": [], "rows": [], "rowCount": 0})
+
+
+@app.route("/api/database/wipe-clean", methods=["POST"])
+def api_database_wipe_clean():
+    try:
+        from scripts.init_db import init_db
+        tables = [
+            'users', 'transactions', 'savings_accounts', 'investments', 'loans', 'treasury',
+            'companies', 'company_members', 'properties', 'property_transactions',
+            'departments', 'department_members', 'department_audit', 'fleet_vehicle_types', 'fleet_vehicles',
+            'drug_operations', 'criminal_missions', 'money_laundering',
+            'auctions', 'marketplace_listings', 'user_inventory', 'shop', 'black_market_stock', 'black_market_transactions', 'items', 'jobs',
+            'tickets', 'ticket_config', 'contracts', 'applications', 'application_config',
+            'level_rewards', 'auto_roles', 'temp_roles',
+            'verification_logs', 'verification_config', 'guild_config', 'db_state'
+        ]
+        for t in tables:
+            try:
+                execute(f'DELETE FROM "{t}"')
+            except Exception:
+                pass
+        init_db()
+        return jsonify({"success": True, "message": "Base de datos restablecida a estado 100% limpio."})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 
 @app.route("/status")
@@ -359,19 +598,24 @@ def bot_control():
 
 
 # ================== FRONTEND SERVING (REACT SPA) ================== #
+@app.route("/assets/<path:filename>")
+def serve_assets(filename):
+    assets_dir = DIST_DIR / "assets"
+    if assets_dir.exists() and (assets_dir / filename).exists():
+        return send_from_directory(str(assets_dir), filename)
+    return jsonify({"error": "Asset not found"}), 404
+
+
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
-    # Si existe el archivo estático en dist/ (ej. assets/index.js, css, etc.)
     if path and (DIST_DIR / path).exists():
         return send_from_directory(str(DIST_DIR), path)
 
-    # Si dist/index.html existe, servir la aplicación React moderna
     index_file = DIST_DIR / "index.html"
     if index_file.exists():
         return send_from_directory(str(DIST_DIR), "index.html")
 
-    # Fallback si no está compilado
     return jsonify({
         "service": "Miami Vice RP Bot Hub",
         "status": "online",
