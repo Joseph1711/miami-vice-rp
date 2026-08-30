@@ -92,8 +92,8 @@ def configure_bot(bot):
 
 async def main():
     _log_startup_diagnostics()
-    bot = MiamiViceBot()
     token = os.environ.get("DISCORD_TOKEN")
+    bot = MiamiViceBot()
     set_bot(
         bot,
         asyncio.get_running_loop(),
@@ -129,21 +129,31 @@ async def main():
         await asyncio.Event().wait()
         return
 
-    try:
-        configure_bot(bot)
-    except Exception as error:
-        logger.exception("No se pudo configurar el bot: %s", error)
-        logger.warning("El panel seguirá disponible; corrige la configuración para encender el bot.")
-        await asyncio.Event().wait()
-        return
-
-    # Intentar conectar con reintentos
+    # Intentar conectar con reintentos y regeneración de instancia limpia
     max_retries = 10
     retry_count = 0
     
     while retry_count < max_retries:
         try:
             logger.info(f"Intento de conexión {retry_count + 1}/{max_retries}...")
+            
+            # Si bot es None o fue cerrado previamente, instanciar y configurar uno nuevo
+            if bot is None or bot.is_closed():
+                bot = MiamiViceBot()
+                configure_bot(bot)
+                set_bot(
+                    bot,
+                    asyncio.get_running_loop(),
+                    token,
+                    factory=MiamiViceBot,
+                    configurator=configure_bot,
+                )
+            else:
+                try:
+                    configure_bot(bot)
+                except Exception:
+                    pass
+
             bot_task = asyncio.create_task(bot.start(token))
             set_bot_task(bot_task)
             await bot_task
@@ -157,12 +167,13 @@ async def main():
             is_429 = getattr(http_err, 'status', None) == 429 or "429" in str(http_err)
             wait_time = min(30 * retry_count, 180) if is_429 else 10
             
-            # Cerrar la sesión de aiohttp si quedó abierta para evitar 'Unclosed client session'
+            # Cerrar la sesión y descartar la instancia para que el próximo intento cree una limpia
             try:
                 if bot and not bot.is_closed():
                     await bot.close()
             except Exception:
                 pass
+            bot = None
 
             if is_429:
                 logger.warning(
@@ -180,6 +191,7 @@ async def main():
                     await bot.close()
             except Exception:
                 pass
+            bot = None
             logger.warning(f"Conexión perdida: {e}. Reintentando en 10s... ({retry_count}/{max_retries})")
             await asyncio.sleep(10)
         except Exception as error:
@@ -190,6 +202,7 @@ async def main():
                     await bot.close()
             except Exception:
                 pass
+            bot = None
             if retry_count >= max_retries:
                 logger.warning("Alcanzado límite de intentos. Manteniendo el panel web activo.")
                 await asyncio.Event().wait()
