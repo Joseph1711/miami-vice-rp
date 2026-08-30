@@ -71,6 +71,30 @@ def _ensure_schema_migrations(conn):
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_id TEXT")
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_profile_url TEXT")
             cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dni_number TEXT")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS criminal_records (
+                    id TEXT PRIMARY KEY,
+                    guild_id TEXT NOT NULL,
+                    discord_id TEXT NOT NULL,
+                    crime_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    fine_amount BIGINT DEFAULT 0,
+                    jail_time_minutes INTEGER DEFAULT 0,
+                    officer_id TEXT NOT NULL,
+                    officer_name TEXT NOT NULL,
+                    status TEXT DEFAULT 'active',
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS guild_configs (
+                    id TEXT PRIMARY KEY,
+                    guild_id TEXT UNIQUE NOT NULL,
+                    police_role_ids TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """)
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")
 
