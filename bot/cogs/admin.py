@@ -368,9 +368,7 @@ class Admin(commands.Cog):
         await aexecute("UPDATE guild_config SET work_logs_channel_id=$1, updated_at=NOW() WHERE guild_id=$2", (str(canal.id), str(interaction.guild_id)))
         await interaction.followup.send(embed=success_embed("Canal de Trabajos Configurado", f"Las evidencias de trabajo se enviarán a {canal.mention}"), ephemeral=True)
 
-    @admin_cfg.command(name="canal_postulaciones", description="Configurar canal para postulaciones a departamentos")
-    @app_commands.describe(canal="Canal donde se enviarán las solicitudes a departamentos")
-    async def cfg_canal_postulaciones(self, interaction: discord.Interaction, canal: discord.TextChannel):
+    async def _handle_canal_postulaciones(self, interaction: discord.Interaction, canal: discord.TextChannel):
         await interaction.response.defer()
         if not await admin_check(interaction):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
@@ -389,15 +387,20 @@ class Admin(commands.Cog):
 
         await interaction.followup.send(embed=success_embed("Canal de Postulaciones Configurado", f"Las solicitudes de departamentos se enviarán a {canal.mention}"), ephemeral=True)
 
+    @admin_cfg.command(name="canal_postulaciones", description="Configurar canal para postulaciones a departamentos")
+    @app_commands.describe(canal="Canal donde se enviarán las solicitudes a departamentos")
+    async def cfg_canal_postulaciones(self, interaction: discord.Interaction, canal: discord.TextChannel):
+        await self._handle_canal_postulaciones(interaction, canal)
+
     @admin_cfg.command(name="solicitud", description="Alias: Configurar canal para postulaciones y solicitudes")
     @app_commands.describe(canal="Canal donde se enviarán las postulaciones")
     async def cfg_solicitud(self, interaction: discord.Interaction, canal: discord.TextChannel):
-        await self.cfg_canal_postulaciones(interaction, canal)
+        await self._handle_canal_postulaciones(interaction, canal)
 
     @admin_cfg.command(name="canal_solicitudes", description="Alias: Configurar canal para postulaciones a departamentos")
     @app_commands.describe(canal="Canal donde se enviarán las solicitudes")
     async def cfg_canal_solicitudes(self, interaction: discord.Interaction, canal: discord.TextChannel):
-        await self.cfg_canal_postulaciones(interaction, canal)
+        await self._handle_canal_postulaciones(interaction, canal)
 
 
     @admin_cfg.command(name="diario", description="Configurar cantidad de /diario")

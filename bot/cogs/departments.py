@@ -382,9 +382,7 @@ class Departments(commands.Cog):
         e.add_field(name="🏷️ Acrónimo Oficial", value=f"`{dept.get('acronym','')}`", inline=True)
         await interaction.followup.send(embed=e)
 
-    @departamento.command(name="postular", description="Enviar solicitud de ingreso a un departamento mediante su acrónimo")
-    @app_commands.describe(acronimo="Acrónimo oficial del departamento al que deseas postular (ej: MPD, MDFR, FHP)")
-    async def postular(self, interaction: discord.Interaction, acronimo: str):
+    async def _handle_postular(self, interaction: discord.Interaction, acronimo: str):
         cd = check_cooldown(f"dept_postular:{interaction.user.id}:{interaction.guild_id}", 5)
         if cd:
             await interaction.response.send_message(embed=error_embed("Espera", f"Intenta en `{cd:.1f}s`"), ephemeral=True)
@@ -431,11 +429,15 @@ class Departments(commands.Cog):
         modal = DepartmentApplicationModal(dept)
         await interaction.response.send_modal(modal)
 
+    @departamento.command(name="postular", description="Enviar solicitud de ingreso a un departamento mediante su acrónimo")
+    @app_commands.describe(acronimo="Acrónimo oficial del departamento al que deseas postular (ej: MPD, MDFR, FHP)")
+    async def postular(self, interaction: discord.Interaction, acronimo: str):
+        await self._handle_postular(interaction, acronimo)
+
     @departamento.command(name="unirse", description="Alias de postular: Enviar solicitud con acrónimo")
     @app_commands.describe(acronimo="Acrónimo del departamento")
     async def unirse(self, interaction: discord.Interaction, acronimo: str):
-        # Redirect to postular logic
-        await self.postular(interaction, acronimo)
+        await self._handle_postular(interaction, acronimo)
 
     @departamento.command(name="mis_postulaciones", description="Ver el historial y estado de tus postulaciones a departamentos")
     async def mis_postulaciones(self, interaction: discord.Interaction):
