@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import datetime
 import logging
+import asyncio
 
 from bot.db import aexecute
 from bot.helpers import generate_id, check_admin_permission
@@ -89,9 +90,9 @@ class TicketReasonModal(discord.ui.Modal, title="Abrir Ticket de Soporte"):
 
             ticket_id = generate_id()
             await aexecute(
-                """INSERT INTO tickets (id, guild_id, creator_id, channel_id, category, status, created_at, updated_at)
-                   VALUES ($1,$2,$3,$4,$5,'open',NOW(),NOW())""",
-                (ticket_id, gid, uid, str(channel.id), self.need_input.value[:50])
+                """INSERT INTO tickets (id, guild_id, creator_id, channel_id, category, reason, subject, status, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,'open',NOW(),NOW())""",
+                (ticket_id, gid, uid, str(channel.id), self.need_input.value[:50], self.reason_input.value, self.need_input.value[:100])
             )
 
             # Enviar mensaje inicial dentro del canal del ticket
@@ -107,7 +108,7 @@ class TicketReasonModal(discord.ui.Modal, title="Abrir Ticket de Soporte"):
             e.set_footer(text="Haz clic en 'Cerrar Ticket' cuando tu consulta esté resuelta.")
 
             close_view = TicketCloseButton()
-            welcome_msg = await channel.send(
+            await channel.send(
                 content=f"{interaction.user.mention} {f'<@&{support_role_id}>' if support_role_id else ''}",
                 embed=e,
                 view=close_view
@@ -135,41 +136,89 @@ class TicketOpenButton(discord.ui.View):
         await interaction.response.send_modal(TicketReasonModal())
 
 
+class TicketAfterCloseActions(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Eliminar Canal", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="ticket_delete_btn")
+    async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message("🗑️ Eliminando canal en 3 segundos...", ephemeral=True)
+        await asyncio.sleep(3)
+        try:
+            await interaction.channel.delete(reason=f"Ticket eliminado por {interaction.user.name}")
+        except Exception as e:
+            logger.warning(f"Error al eliminar canal: {e}")
+
+
 class TicketCloseButton(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Cerrar Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket_close_persistent")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await execute_close_ticket(interaction)
+
+
+async def execute_close_ticket(interaction: discord.Interaction):
+    """Lógica unificada para cerrar un ticket vía botón o slash command /ticket cerrar."""
+    if not interaction.response.is_done():
         await interaction.response.defer()
-        gid = str(interaction.guild_id)
-        cid = str(interaction.channel_id)
 
-        ticket = await aexecute(
-            "SELECT * FROM tickets WHERE channel_id=$1 AND status='open'",
-            (cid,), fetch="one"
-        )
-        if not ticket:
-            await interaction.followup.send(embed=error_embed("Error", "No hay un ticket activo registrado en este canal"), ephemeral=True)
-            return
+    gid = str(interaction.guild_id)
+    cid = str(interaction.channel_id)
 
+    # Buscar ticket en DB
+    ticket = await aexecute(
+        "SELECT * FROM tickets WHERE channel_id=$1 ORDER BY created_at DESC LIMIT 1",
+        (cid,), fetch="one"
+    )
+
+    is_ticket_channel = False
+    if ticket:
+        is_ticket_channel = True
         await aexecute(
             "UPDATE tickets SET status='closed', closed_by=$1, updated_at=NOW() WHERE id=$2",
             (str(interaction.user.id), ticket["id"])
         )
-
-        await interaction.followup.send(
-            embed=success_embed("Ticket Cerrado", f"Ticket cerrado por {interaction.user.mention}. El canal será archivado/eliminado.")
+    elif interaction.channel.name.startswith("ticket-") or interaction.channel.name.startswith("ticket_") or "ticket" in interaction.channel.name.lower():
+        is_ticket_channel = True
+        # Insertar registro retroactivo para consistencia
+        await aexecute(
+            """INSERT INTO tickets (id, guild_id, creator_id, channel_id, category, status, closed_by, created_at, updated_at)
+               VALUES ($1,$2,$3,$4,'Soporte','closed',$5,NOW(),NOW())""",
+            (generate_id(), gid, str(interaction.user.id), cid, str(interaction.user.id))
         )
 
-        try:
-            await interaction.channel.edit(name=f"cerrado-{interaction.channel.name[-10:]}")
-            # Quitar permisos de escritura al creador
-            creator = interaction.guild.get_member(int(ticket["creator_id"]))
-            if creator:
+    if not is_ticket_channel and not interaction.user.guild_permissions.manage_channels:
+        await interaction.followup.send(
+            embed=error_embed("No es un Ticket", "Este canal no parece ser un ticket de soporte activo."),
+            ephemeral=True
+        )
+        return
+
+    # Modificar permisos del creador para que no escriba más
+    if ticket and ticket.get("creator_id") and str(ticket["creator_id"]).isdigit():
+        creator = interaction.guild.get_member(int(ticket["creator_id"]))
+        if creator:
+            try:
                 await interaction.channel.set_permissions(creator, send_messages=False, read_messages=True)
-        except Exception:
-            pass
+            except Exception:
+                pass
+
+    try:
+        if not interaction.channel.name.startswith("cerrado-"):
+            await interaction.channel.edit(name=f"cerrado-{interaction.channel.name[-10:]}")
+    except Exception:
+        pass
+
+    close_embed = success_embed(
+        "🔒 Ticket de Soporte Cerrado",
+        f"Este ticket ha sido cerrado por {interaction.user.mention}.\n\nPuedes eliminar el canal inmediatamente usando el botón inferior o dejarlo archivado."
+    )
+    close_embed.set_footer(text="Miami Vice RP • Soporte")
+    
+    view = TicketAfterCloseActions()
+    await interaction.followup.send(embed=close_embed, view=view)
 
 
 class Tickets(commands.Cog, name="Tickets"):
@@ -288,24 +337,7 @@ class Tickets(commands.Cog, name="Tickets"):
 
     @ticket.command(name="cerrar", description="Cerrar el ticket actual")
     async def cerrar(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        ticket = await aexecute(
-            "SELECT * FROM tickets WHERE channel_id=$1 AND status='open'",
-            (str(interaction.channel_id),), fetch="one"
-        )
-        if not ticket:
-            await interaction.followup.send(embed=error_embed("Error", "Este canal no corresponde a un ticket abierto"), ephemeral=True)
-            return
-
-        await aexecute(
-            "UPDATE tickets SET status='closed', closed_by=$1, updated_at=NOW() WHERE id=$2",
-            (str(interaction.user.id), ticket["id"])
-        )
-        await interaction.followup.send(embed=success_embed("Ticket Cerrado", f"Cerrado por {interaction.user.mention}"))
-        try:
-            await interaction.channel.edit(name=f"cerrado-{interaction.channel.name[-10:]}")
-        except Exception:
-            pass
+        await execute_close_ticket(interaction)
 
 
 async def setup(bot):
