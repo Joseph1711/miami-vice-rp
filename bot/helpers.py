@@ -235,3 +235,111 @@ async def generate_unique_weapon_serial(guild_id: str) -> str:
             return serial
     return f"MV-WPN-{uuid.uuid4().hex[:8].upper()}"
 
+async def generate_unique_vehicle_plate(guild_id: str, vehicle_type: str = "auto") -> str:
+    """Genera una placa de circulación única y estilizada según el tipo de vehículo."""
+    import random
+    import string
+    
+    prefix = "MIA"
+    if vehicle_type in ("trailer", "remolque"):
+        prefix = "TRL"
+    elif vehicle_type in ("atv", "cuatrimoto", "quad", "buggy"):
+        prefix = "ATV"
+    elif vehicle_type in ("moto", "motocicleta", "scooter"):
+        prefix = "MOT"
+    elif vehicle_type in ("lancha", "bote", "jet_ski"):
+        prefix = "SEA"
+    elif vehicle_type in ("camion", "comercial"):
+        prefix = "TRK"
+
+    for _ in range(30):
+        num = random.randint(1000, 9999)
+        plate = f"{prefix}-{num}"
+        existing = await aexecute("SELECT id FROM vehicle_registries WHERE plate=$1", (plate,), fetch="one")
+        if not existing:
+            return plate
+            
+    # Fallback con letra
+    letter = random.choice(string.ascii_uppercase)
+    return f"{prefix}-{random.randint(100, 999)}{letter}"
+
+async def generate_unique_vin(guild_id: str, vehicle_type: str = "auto") -> str:
+    """Genera un número de serie / VIN de chasis único para el vehículo registrado."""
+    import random
+    import string
+
+    code_map = {
+        "auto": "AUT",
+        "suv": "SUV",
+        "moto": "MOT",
+        "atv": "ATV",
+        "trailer": "TRL",
+        "camion": "TRK",
+        "lancha": "BOT",
+        "otro": "VEH"
+    }
+    code = code_map.get(vehicle_type, "VEH")
+    
+    for _ in range(30):
+        digits = "".join([str(random.randint(0, 9)) for _ in range(6)])
+        letters = "".join(random.choices(string.ascii_uppercase, k=2))
+        vin = f"1MV-{code}-{digits}-{letters}"
+        existing = await aexecute("SELECT id FROM vehicle_registries WHERE vin_number=$1", (vin,), fetch="one")
+        if not existing:
+            return vin
+
+    return f"1MV-{code}-{uuid.uuid4().hex[:8].upper()}"
+
+async def is_officer_or_admin(interaction) -> bool:
+    """Verifica si el usuario es Administrador o miembro activo de un Departamento de Seguridad/Justicia."""
+    if await check_admin_permission(interaction):
+        return True
+    if not interaction.guild or not interaction.user:
+        return False
+    gid = str(interaction.guild_id)
+    uid = str(interaction.user.id)
+    dept_member = await aexecute(
+        """SELECT dm.id FROM department_members dm
+           JOIN departments d ON dm.department_id = d.id
+           WHERE dm.guild_id=$1 AND dm.discord_id=$2 
+           AND LOWER(d.type) IN ('police', 'sheriff', 'highway_patrol', 'justice', 'fbi', 'dea', 'swat', 'seguridad', 'legal', 'mdfr', 'mpd', 'fhp', 'mbpd', 'fdoj')""",
+        (gid, uid), fetch="one"
+    )
+    return bool(dept_member)
+
+async def generate_unique_bolo_code(guild_id: str) -> str:
+    """Genera un código BOLO único (ej. BOLO-8492)."""
+    import random
+    for _ in range(30):
+        num = random.randint(1000, 9999)
+        code = f"BOLO-{num}"
+        existing = await aexecute("SELECT id FROM police_bolos WHERE bolo_code=$1 AND guild_id=$2", (code, guild_id), fetch="one")
+        if not existing:
+            return code
+    return f"BOLO-{uuid.uuid4().hex[:6].upper()}"
+
+async def generate_unique_case_number(guild_id: str) -> str:
+    """Genera un número de expediente penal / caso policial único (ej. CASO-2026-7491)."""
+    import random
+    year = datetime.datetime.utcnow().year
+    for _ in range(30):
+        num = random.randint(1000, 9999)
+        code = f"CASO-{year}-{num}"
+        existing = await aexecute("SELECT id FROM police_cases WHERE case_number=$1 AND guild_id=$2", (code, guild_id), fetch="one")
+        if not existing:
+            return code
+    return f"CASO-{year}-{uuid.uuid4().hex[:6].upper()}"
+
+async def generate_unique_incident_code(guild_id: str) -> str:
+    """Genera un código de incidente de despacho / 911 único (ej. INC-9302)."""
+    import random
+    for _ in range(30):
+        num = random.randint(1000, 9999)
+        code = f"INC-{num}"
+        existing = await aexecute("SELECT id FROM police_incidents WHERE incident_code=$1 AND guild_id=$2", (code, guild_id), fetch="one")
+        if not existing:
+            return code
+    return f"INC-{uuid.uuid4().hex[:6].upper()}"
+
+
+
