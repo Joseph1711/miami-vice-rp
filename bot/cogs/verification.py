@@ -3,7 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 import datetime
 import logging
-import json
+import re
 
 from bot.db import aexecute
 from bot.helpers import async_get_or_create_user, generate_id, check_admin_permission
@@ -11,6 +11,34 @@ from bot.embeds import success_embed, error_embed, info_embed
 from bot.cogs.roblox import fetch_roblox_user
 
 logger = logging.getLogger("bot.cogs.verification")
+
+
+def parse_roles_from_string(guild: discord.Guild, input_str: str) -> list[discord.Role]:
+    """Extrae roles de Discord a partir de menciones, IDs o nombres separados por comas/espacios."""
+    if not input_str:
+        return []
+    
+    roles = []
+    # 1. Extraer por IDs o menciones <@&123456789>
+    ids = re.findall(r"\d{17,21}", input_str)
+    for rid in ids:
+        r = guild.get_role(int(rid))
+        if r and r not in roles:
+            roles.append(r)
+
+    # 2. Extraer por nombre del rol (separado por comas, saltos de línea o punto y coma)
+    tokens = [t.strip().lstrip("@") for t in re.split(r"[,;\n]+", input_str) if t.strip()]
+    for token in tokens:
+        if not token:
+            continue
+        if any(token.lower() == r.name.lower() for r in roles):
+            continue
+        for r in guild.roles:
+            if r.name.lower() == token.lower() and r not in roles:
+                roles.append(r)
+                break
+
+    return roles
 
 
 class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
@@ -95,14 +123,14 @@ class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
                 (generate_id(), gid, uid, roblox_name, str(age_val))
             )
 
-            # Gestionar otorgamiento de uno o más roles
+            # GESTIONAR OTORGAMIENTO DE UNO O MÚLTIPLES ROLES
             roles_added_mentions = []
             roles_removed_mentions = []
 
-            # 1. Roles a otorgar (roles_to_add y verified_role_id legado)
+            # 1. Coleccionar todos los roles a otorgar
             add_role_ids = set()
             if config.get("roles_to_add"):
-                for rid in config["roles_to_add"].split(","):
+                for rid in str(config["roles_to_add"]).split(","):
                     if rid.strip().isdigit():
                         add_role_ids.add(int(rid.strip()))
             if config.get("verified_role_id") and str(config["verified_role_id"]).isdigit():
@@ -115,21 +143,21 @@ class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
                         await interaction.user.add_roles(role, reason="Verificación oficial completada")
                         roles_added_mentions.append(role.mention)
                     except Exception as e:
-                        logger.warning(f"No se pudo agregar rol {rid} a {interaction.user.id}: {e}")
+                        logger.warning(f"No se pudo agregar rol {role.name} ({rid}) a {interaction.user.id}: {e}")
 
-            # 2. Roles a retirar (roles_to_remove)
+            # 2. Coleccionar y retirar roles configurados (ej: No Verificado)
             if config.get("roles_to_remove"):
-                for rid in config["roles_to_remove"].split(","):
+                for rid in str(config["roles_to_remove"]).split(","):
                     if rid.strip().isdigit():
                         role = interaction.guild.get_role(int(rid.strip()))
                         if role and role in interaction.user.roles:
                             try:
-                                await interaction.user.remove_roles(role, reason="Retiro de roles tras verificación")
+                                await interaction.user.remove_roles(role, reason="Retiro de rol por verificación completada")
                                 roles_removed_mentions.append(role.mention)
                             except Exception as e:
-                                logger.warning(f"No se pudo remover rol {rid} a {interaction.user.id}: {e}")
+                                logger.warning(f"No se pudo remover rol {role.name} ({rid}) a {interaction.user.id}: {e}")
 
-            # Log al canal configurado
+            # 3. Notificación al canal de logs si está configurado
             log_channel_id = config.get("log_channel_id")
             if log_channel_id and str(log_channel_id).isdigit():
                 log_channel = interaction.guild.get_channel(int(log_channel_id))
@@ -152,10 +180,10 @@ class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
                     
                     try:
                         await log_channel.send(embed=log_e)
-                    except Exception:
-                        pass
+                    except Exception as err:
+                        logger.warning(f"Error al enviar log de verificación: {err}")
 
-            # Embed de respuesta al usuario
+            # 4. Respuesta al usuario que se verificó
             resp_e = success_embed(
                 "¡Verificación Exitosa!",
                 f"Bienvenido/a a **{interaction.guild.name}**. Tu perfil ha sido autenticado y vinculado con éxito."
@@ -168,6 +196,9 @@ class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
             
             if roles_added_mentions:
                 resp_e.add_field(name="✅ Roles Otorgados", value=" ".join(roles_added_mentions), inline=False)
+            elif add_role_ids:
+                resp_e.add_field(name="ℹ️ Roles Asignados", value="Ya tenías los roles otorgados o fueron procesados.", inline=False)
+            
             if roles_removed_mentions:
                 resp_e.add_field(name="❌ Roles Retirados", value=" ".join(roles_removed_mentions), inline=False)
 
@@ -177,7 +208,7 @@ class VerifyModal(discord.ui.Modal, title="Verificación Oficial"):
         except Exception as e:
             logger.error(f"Error en verificación: {e}", exc_info=True)
             await interaction.followup.send(
-                embed=error_embed("Error de Verificación", f"Ocurrió un inconveniente: `{e}`"),
+                embed=error_embed("Error de Verificación", f"Ocurrió un inconveniente al procesar tu verificación: `{e}`"),
                 ephemeral=True
             )
 
@@ -195,11 +226,14 @@ class Verification(commands.Cog, name="Verificación"):
     def __init__(self, bot):
         self.bot = bot
 
-    verificar = app_commands.Group(name="verificar", description="Sistema y panel de verificación oficial")
+    verificar = app_commands.Group(name="verificar", description="Sistema y panel de verificación oficial multi-rol")
 
     @verificar.command(name="panel", description="Publicar el panel interactivo de verificación en un canal")
     @app_commands.describe(
         canal="Canal donde se publicará el panel de verificación (omite para el canal actual)",
+        roles_otorgar="Uno o más roles a otorgar al verificarse (menciones o nombres separados por coma)",
+        roles_retirar="Uno o más roles a retirar al verificarse (ej: @NoVerificado)",
+        canal_logs="Canal donde se enviarán los registros de verificación",
         titulo="Título del panel",
         descripcion="Descripción o instrucciones del panel"
     )
@@ -207,6 +241,9 @@ class Verification(commands.Cog, name="Verificación"):
         self,
         interaction: discord.Interaction,
         canal: discord.TextChannel = None,
+        roles_otorgar: str = None,
+        roles_retirar: str = None,
+        canal_logs: discord.TextChannel = None,
         titulo: str = "🛡️ Sistema de Verificación Oficial",
         descripcion: str = "¡Bienvenido/a a **Miami Vice RP**!\n\nPara acceder a los canales del servidor y comenzar tu experiencia de rol, presiona el botón **'Verificarme'** a continuación y completa tus datos."
     ):
@@ -215,26 +252,67 @@ class Verification(commands.Cog, name="Verificación"):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Necesitas permisos de administrador"), ephemeral=True)
             return
 
+        gid = str(interaction.guild_id)
         target_channel = canal or interaction.channel
-        
+
+        # Si se especificaron roles o canal de logs en el comando del panel, actualizar configuración
+        if roles_otorgar or roles_retirar or canal_logs:
+            existing = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one")
+            
+            add_roles = parse_roles_from_string(interaction.guild, roles_otorgar) if roles_otorgar else []
+            remove_roles = parse_roles_from_string(interaction.guild, roles_retirar) if roles_retirar else []
+
+            roles_to_add_str = ",".join(str(r.id) for r in add_roles) if add_roles else (existing.get("roles_to_add") if existing else None)
+            roles_to_remove_str = ",".join(str(r.id) for r in remove_roles) if remove_roles else (existing.get("roles_to_remove") if existing else None)
+            log_chan_str = str(canal_logs.id) if canal_logs else (existing.get("log_channel_id") if existing else None)
+            first_role = str(add_roles[0].id) if add_roles else (existing.get("verified_role_id") if existing else None)
+
+            if existing:
+                await aexecute(
+                    """UPDATE verification_config 
+                       SET roles_to_add=$1, roles_to_remove=$2, log_channel_id=$3, verified_role_id=$4, updated_at=NOW()
+                       WHERE guild_id=$5""",
+                    (roles_to_add_str, roles_to_remove_str, log_chan_str, first_role, gid)
+                )
+            else:
+                await aexecute(
+                    """INSERT INTO verification_config (id, guild_id, roles_to_add, roles_to_remove, log_channel_id, min_account_age_days, verified_role_id, created_at, updated_at)
+                       VALUES ($1, $2, $3, $4, $5, 0, $6, NOW(), NOW())""",
+                    (generate_id(), gid, roles_to_add_str, roles_to_remove_str, log_chan_str, first_role)
+                )
+
+        # Consultar roles configurados para mostrarlos en el embed
+        config = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one") or {}
+        roles_text = []
+        if config.get("roles_to_add"):
+            for rid in str(config["roles_to_add"]).split(","):
+                if rid.strip().isdigit():
+                    roles_text.append(f"<@&{rid.strip()}>")
+
         embed = discord.Embed(
             title=titulo,
             description=descripcion,
             color=discord.Color.blue()
         )
         embed.set_image(url="https://images.unsplash.com/photo-1514565131-fce0801e5785?w=1200&auto=format&fit=crop&q=80")
+        if roles_text:
+            embed.add_field(name="🎁 Roles que recibirás", value=" ".join(roles_text), inline=False)
         embed.set_footer(text=f"{interaction.guild.name} • Seguridad & Verificación", icon_url=interaction.guild.icon.url if interaction.guild.icon else None)
 
         view = VerifyButton()
         await target_channel.send(embed=embed, view=view)
-        await interaction.followup.send(embed=success_embed("Panel Publicado", f"El panel de verificación fue publicado exitosamente en {target_channel.mention}."), ephemeral=True)
 
-    @verificar.command(name="configurar", description="Configurar los roles a otorgar, roles a retirar y canal de logs")
+        resp = success_embed("Panel de Verificación Publicado", f"El panel fue publicado exitosamente en {target_channel.mention}.")
+        if roles_text:
+            resp.add_field(name="Roles Asignados", value=" ".join(roles_text), inline=False)
+        await interaction.followup.send(embed=resp, ephemeral=True)
+
+    @verificar.command(name="configurar", description="Configurar uno o múltiples roles a otorgar, roles a retirar y canal de logs")
     @app_commands.describe(
-        roles_otorgar="Roles a otorgar al verificarse (separados por comas o menciones)",
-        roles_retirar="Roles a retirar al verificarse (ej: No Verificado, Invitado)",
+        roles_otorgar="Uno o más roles a otorgar (ej: @Ciudadano, @Verificado, @Miembro)",
+        roles_retirar="Uno o más roles a retirar tras verificarse (ej: @NoVerificado)",
         canal_logs="Canal de logs donde se notificarán las verificaciones",
-        edad_minima_cuenta_dias="Días mínimos de antigüedad de la cuenta de Discord"
+        edad_minima_cuenta_dias="Días mínimos de antigüedad de la cuenta de Discord (0 para desactivar)"
     )
     async def configurar(
         self,
@@ -251,26 +329,13 @@ class Verification(commands.Cog, name="Verificación"):
 
         gid = str(interaction.guild_id)
 
-        # Extraer IDs de roles a otorgar
-        add_ids = []
-        if roles_otorgar:
-            # Buscar menciones <@&123> o números directos
-            import re
-            found = re.findall(r"\d+", roles_otorgar)
-            for rid in found:
-                r = interaction.guild.get_role(int(rid))
-                if r:
-                    add_ids.append(str(r.id))
+        # Extraer roles a otorgar
+        add_roles = parse_roles_from_string(interaction.guild, roles_otorgar) if roles_otorgar else []
+        add_ids = [str(r.id) for r in add_roles]
         
-        # Extraer IDs de roles a retirar
-        remove_ids = []
-        if roles_retirar:
-            import re
-            found = re.findall(r"\d+", roles_retirar)
-            for rid in found:
-                r = interaction.guild.get_role(int(rid))
-                if r:
-                    remove_ids.append(str(r.id))
+        # Extraer roles a retirar
+        remove_roles = parse_roles_from_string(interaction.guild, roles_retirar) if roles_retirar else []
+        remove_ids = [str(r.id) for r in remove_roles]
 
         existing = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one")
         
@@ -278,8 +343,6 @@ class Verification(commands.Cog, name="Verificación"):
         roles_to_remove_str = ",".join(remove_ids) if remove_ids else (existing.get("roles_to_remove") if existing else None)
         log_chan_str = str(canal_logs.id) if canal_logs else (existing.get("log_channel_id") if existing else None)
         min_age = edad_minima_cuenta_dias if edad_minima_cuenta_dias is not None else (existing.get("min_account_age_days", 0) if existing else 0)
-
-        # Mantener verified_role_id legado apuntando al primer rol de add_ids si existe
         first_role = add_ids[0] if add_ids else (existing.get("verified_role_id") if existing else None)
 
         if existing:
@@ -296,17 +359,126 @@ class Verification(commands.Cog, name="Verificación"):
                 (generate_id(), gid, roles_to_add_str, roles_to_remove_str, log_chan_str, min_age, first_role)
             )
 
-        e = success_embed("Configuración de Verificación Guardada", "Los ajustes han sido actualizados exitosamente.")
+        e = success_embed("Configuración de Verificación Guardada", "Los ajustes multi-rol han sido actualizados exitosamente.")
         
         if roles_to_add_str:
             r_mentions = [f"<@&{r}>" for r in roles_to_add_str.split(",") if r.isdigit()]
-            e.add_field(name="Roles a Otorgar", value=" ".join(r_mentions) or "Ninguno", inline=False)
+            e.add_field(name="✅ Roles a Otorgar", value=" ".join(r_mentions) if r_mentions else "Ninguno", inline=False)
+        else:
+            e.add_field(name="✅ Roles a Otorgar", value="*Ninguno configurado*", inline=False)
+
         if roles_to_remove_str:
             r_mentions = [f"<@&{r}>" for r in roles_to_remove_str.split(",") if r.isdigit()]
-            e.add_field(name="Roles a Retirar", value=" ".join(r_mentions) or "Ninguno", inline=False)
+            e.add_field(name="❌ Roles a Retirar", value=" ".join(r_mentions) if r_mentions else "Ninguno", inline=False)
+
         if log_chan_str:
-            e.add_field(name="Canal de Logs", value=f"<#{log_chan_str}>", inline=True)
-        e.add_field(name="Antigüedad Mínima de Cuenta", value=f"{min_age} días", inline=True)
+            e.add_field(name="📋 Canal de Logs", value=f"<#{log_chan_str}>", inline=True)
+        e.add_field(name="⏳ Antigüedad Mínima", value=f"{min_age} días", inline=True)
+
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+    @verificar.command(name="agregar_rol", description="Añadir un rol adicional a la lista de roles otorgados en la verificación")
+    @app_commands.describe(rol="Rol de Discord a añadir a la verificación")
+    async def agregar_rol(self, interaction: discord.Interaction, rol: discord.Role):
+        await interaction.response.defer(ephemeral=True)
+        if not await check_admin_permission(interaction):
+            await interaction.followup.send(embed=error_embed("Sin permisos", "Necesitas permisos de administrador"), ephemeral=True)
+            return
+
+        gid = str(interaction.guild_id)
+        existing = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one")
+
+        current_roles = set()
+        if existing and existing.get("roles_to_add"):
+            for r in str(existing["roles_to_add"]).split(","):
+                if r.strip().isdigit():
+                    current_roles.add(r.strip())
+        if existing and existing.get("verified_role_id") and str(existing["verified_role_id"]).isdigit():
+            current_roles.add(str(existing["verified_role_id"]))
+
+        current_roles.add(str(rol.id))
+        new_roles_str = ",".join(current_roles)
+
+        if existing:
+            await aexecute("UPDATE verification_config SET roles_to_add=$1, updated_at=NOW() WHERE guild_id=$2", (new_roles_str, gid))
+        else:
+            await aexecute(
+                """INSERT INTO verification_config (id, guild_id, roles_to_add, verified_role_id, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, NOW(), NOW())""",
+                (generate_id(), gid, new_roles_str, str(rol.id))
+            )
+
+        mentions = [f"<@&{rid}>" for rid in current_roles]
+        e = success_embed("Rol Añadido a la Verificación", f"El rol {rol.mention} fue agregado.\n\n**Lista completa de roles a otorgar:**\n" + " ".join(mentions))
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+    @verificar.command(name="remover_rol", description="Quitar un rol de la lista de roles otorgados en la verificación")
+    @app_commands.describe(rol="Rol de Discord a remover de la lista")
+    async def remover_rol(self, interaction: discord.Interaction, rol: discord.Role):
+        await interaction.response.defer(ephemeral=True)
+        if not await check_admin_permission(interaction):
+            await interaction.followup.send(embed=error_embed("Sin permisos", "Necesitas permisos de administrador"), ephemeral=True)
+            return
+
+        gid = str(interaction.guild_id)
+        existing = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one")
+
+        if not existing or not existing.get("roles_to_add"):
+            await interaction.followup.send(embed=error_embed("Sin Configuración", "No hay roles configurados en este servidor."), ephemeral=True)
+            return
+
+        current_roles = set()
+        for r in str(existing.get("roles_to_add", "")).split(","):
+            if r.strip().isdigit() and r.strip() != str(rol.id):
+                current_roles.add(r.strip())
+
+        new_roles_str = ",".join(current_roles)
+        await aexecute("UPDATE verification_config SET roles_to_add=$1, updated_at=NOW() WHERE guild_id=$2", (new_roles_str, gid))
+
+        mentions = [f"<@&{rid}>" for rid in current_roles]
+        e = success_embed("Rol Removido de la Verificación", f"El rol {rol.mention} ya no se otorgará al verificarse.\n\n**Roles restantes a otorgar:**\n" + (" ".join(mentions) if mentions else "*Ninguno*"))
+        await interaction.followup.send(embed=e, ephemeral=True)
+
+    @verificar.command(name="ver_config", description="Ver la configuración actual de roles y canales de verificación")
+    async def ver_config(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await check_admin_permission(interaction):
+            await interaction.followup.send(embed=error_embed("Sin permisos", "Necesitas permisos de administrador"), ephemeral=True)
+            return
+
+        gid = str(interaction.guild_id)
+        config = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one") or {}
+
+        e = info_embed("📋 Configuración Actual de Verificación", f"Servidor: **{interaction.guild.name}**")
+
+        # Roles to add
+        add_mentions = []
+        if config.get("roles_to_add"):
+            for rid in str(config["roles_to_add"]).split(","):
+                if rid.strip().isdigit():
+                    add_mentions.append(f"<@&{rid.strip()}>")
+        if config.get("verified_role_id") and str(config["verified_role_id"]).isdigit():
+            v_mention = f"<@&{config['verified_role_id']}>"
+            if v_mention not in add_mentions:
+                add_mentions.append(v_mention)
+
+        e.add_field(name="✅ Roles a Otorgar", value=" ".join(add_mentions) if add_mentions else "*Ninguno configurado*", inline=False)
+
+        # Roles to remove
+        remove_mentions = []
+        if config.get("roles_to_remove"):
+            for rid in str(config["roles_to_remove"]).split(","):
+                if rid.strip().isdigit():
+                    remove_mentions.append(f"<@&{rid.strip()}>")
+        e.add_field(name="❌ Roles a Retirar", value=" ".join(remove_mentions) if remove_mentions else "*Ninguno*", inline=False)
+
+        # Log channel
+        log_id = config.get("log_channel_id")
+        e.add_field(name="📢 Canal de Logs", value=f"<#{log_id}>" if log_id and str(log_id).isdigit() else "*Sin canal de logs*", inline=True)
+        
+        # Min account age
+        min_age = config.get("min_account_age_days", 0)
+        e.add_field(name="⏳ Antigüedad Mínima", value=f"{min_age} días" if min_age else "Desactivada (0 días)", inline=True)
 
         await interaction.followup.send(embed=e, ephemeral=True)
 
@@ -354,10 +526,10 @@ class Verification(commands.Cog, name="Verificación"):
 
         config = await aexecute("SELECT * FROM verification_config WHERE guild_id=$1", (gid,), fetch="one") or {}
         
-        # Retirar roles otorgados
+        # Retirar todos los roles otorgados
         add_role_ids = set()
         if config.get("roles_to_add"):
-            for rid in config["roles_to_add"].split(","):
+            for rid in str(config["roles_to_add"]).split(","):
                 if rid.strip().isdigit():
                     add_role_ids.add(int(rid.strip()))
         if config.get("verified_role_id") and str(config["verified_role_id"]).isdigit():

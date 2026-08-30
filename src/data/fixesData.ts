@@ -2918,5 +2918,25 @@ export const SIMULATED_COMMANDS: SimulatedCommand[] = [
       "embedTitle": "⚖️ LIBERTAD BAJO FIANZA JUDICIAL",
       "embedContent": "Se ha efectuado el pago total de la caución penal fijada por el Departamento de Justicia:\n\n👤 **Sospechoso Liberado:** @Sospechoso (**Tommy Vance**)\n🪪 **DNI:** `MIA-583920`\n💵 **Monto de Fianza:** `$5,000.00`\n🤝 **Depositante / Fiador:** @Fiador\n⚖️ **Cargos Originales:** Conducción temeraria y desacato\n\n*Expediente #EXP-9382 • Estado: LIBERADO BAJO FIANZA 🔓*"
     }
+  },
+  {
+    "command": "/verificar panel",
+    "category": "Tickets y Verificación",
+    "cog": "verification",
+    "description": "Publicar el panel interactivo de verificación oficial con soporte para otorgar múltiples roles simultáneamente",
+    "beforeBehavior": {
+      "state": "warning",
+      "log": "[WARN] Solo permitía asignar un único rol al verificarse",
+      "discordStatus": "⚠️ Solo un rol",
+      "timeElapsed": "10 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Verificación completada para @Usuario -> Otorgados 3 roles (@Ciudadano, @Verificado, @Miembro) y retirado @NoVerificado.",
+      "discordStatus": "✅ Multi-rol activo",
+      "timeElapsed": "14 ms",
+      "embedTitle": "🛡️ Sistema de Verificación Oficial",
+      "embedContent": "¡Bienvenido/a a **Miami Vice RP**!\n\nPresiona el botón **'Verificarme'** para completar tus datos y vincular tu cuenta de Roblox.\n\n🎁 **Roles otorgados:** `@Ciudadano` `@Verificado` `@Miembro`\n❌ **Rol retirado:** `@NoVerificado`"
+    }
   }
 ];

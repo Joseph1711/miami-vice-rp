@@ -157,8 +157,11 @@ HELP_CATEGORIES = {
             ("/ticket panel [canal] [categoria] [rol]", "Publicar panel interactivo en el canal y categoría seleccionados"),
             ("/ticket abrir", "Abrir un ticket llenando el formulario/modal interactivo obligatorio"),
             ("/ticket cerrar", "Cerrar el ticket actual"),
-            ("/verificar panel [canal]", "Publicar panel oficial de verificación con conexión a Roblox"),
-            ("/verificar configurar [roles_otorgar] [roles_retirar]", "Configurar roles a dar y retirar automáticamente"),
+            ("/verificar panel [canal] [roles_otorgar] [roles_retirar]", "Publicar panel de verificación multi-rol con conexión a Roblox"),
+            ("/verificar configurar [roles_otorgar] [roles_retirar]", "Configurar uno o múltiples roles a otorgar y retirar"),
+            ("/verificar agregar_rol @rol", "Añadir un rol adicional a la lista de roles otorgados"),
+            ("/verificar remover_rol @rol", "Quitar un rol de la lista de verificación"),
+            ("/verificar ver_config", "Ver la lista actual de roles y canales de verificación"),
             ("/verificar estado [usuario]", "Consultar estado de verificación y Roblox vinculado"),
         ]
     },
