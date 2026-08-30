@@ -12,6 +12,23 @@ from bot.config import XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX
 
 logger = logging.getLogger("bot")
 
+def set_bot_task(task):
+    """Compatibilidad con versiones que importan set_bot_task desde bot.events"""
+    try:
+        from keep_alive import set_bot_task as _set_bot_task
+        _set_bot_task(task)
+    except Exception:
+        pass
+
+def set_bot(*args, **kwargs):
+    """Compatibilidad con versiones que importan set_bot desde bot.events"""
+    try:
+        from keep_alive import set_bot as _set_bot
+        _set_bot(*args, **kwargs)
+    except Exception:
+        pass
+
+
 STATUS_ACTIVITIES = [
     (discord.ActivityType.watching, "Viendo la ciudad de Miami 🌴"),
     (discord.ActivityType.watching, "Caminando por las calles de Miami Beach 🏖️"),
