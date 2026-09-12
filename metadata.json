@@ -1,6 +1,6 @@
 {
-  "name": "Miami Vice RP Bot - Discord Async Fix & Diagnostics",
-  "description": "Herramienta interactiva de diagnóstico, visualización de parches y corrección del error de bucle infinito en peticiones asíncronas para el bot de Discord de Miami Vice RP.",
+  "name": "Miami Vice RP - Supabase Database Manager",
+  "description": "Panel de gestión y visualización de la base de datos Supabase para Miami Vice Roleplay con explorador de tablas, consultas SQL y esquema.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

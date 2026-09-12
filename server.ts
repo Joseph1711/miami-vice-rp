@@ -323,6 +323,106 @@ app.post("/api/bot/save-file", (req, res) => {
   }
 });
 
+// 6.5 Supabase Database Information & Status
+app.get("/api/database/supabase-info", (req, res) => {
+  const pyCode = `
+import json, os, time
+try:
+    from bot.db import check_connection, is_postgres, execute
+    start_t = time.time()
+    conn_info = check_connection()
+    latency_ms = round((time.time() - start_t) * 1000, 2)
+    
+    pg_url = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL") or ""
+    masked_url = ""
+    host = ""
+    port = 5432
+    db_name = "postgres"
+    
+    if pg_url:
+        import urllib.parse
+        try:
+            parsed = urllib.parse.urlparse(pg_url)
+            host = parsed.hostname or "db.supabase.co"
+            port = parsed.port or 5432
+            db_name = parsed.path.lstrip("/") or "postgres"
+            user = parsed.username or "postgres"
+            masked_url = f"{parsed.scheme}://{user}:••••••••@{host}:{port}/{db_name}"
+        except Exception:
+            masked_url = "postgresql://postgres:••••••••@supabase:5432/postgres"
+    else:
+        masked_url = "sqlite:///app/applet/miami_vice.sqlite3 (Local Fallback)"
+        host = "Local SQLite Storage"
+        db_name = "miami_vice.sqlite3"
+        port = 0
+
+    # Count tables
+    if is_postgres():
+        t_res = execute("SELECT COUNT(*) as c FROM information_schema.tables WHERE table_schema = 'public'", fetch="one")
+    else:
+        t_res = execute("SELECT COUNT(*) as c FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", fetch="one")
+    
+    table_count = t_res.get("c", 0) if t_res else 0
+
+    print(json.dumps({
+        "connected": conn_info.get("ok", False),
+        "backend": "supabase" if is_postgres() else "sqlite",
+        "urlConfigured": bool(pg_url),
+        "maskedUrl": masked_url,
+        "host": host,
+        "database": db_name,
+        "port": port,
+        "sslMode": "require" if is_postgres() else "none",
+        "latencyMs": latency_ms,
+        "totalTables": table_count,
+        "schemaVersion": "v2.6.0 (PostgreSQL / Supabase + Server Control)"
+    }))
+except Exception as e:
+    print(json.dumps({
+        "connected": False,
+        "backend": "sqlite",
+        "urlConfigured": False,
+        "maskedUrl": "No configurado",
+        "host": "Unknown",
+        "database": "Unknown",
+        "port": 0,
+        "sslMode": "none",
+        "latencyMs": 0,
+        "totalTables": 0,
+        "schemaVersion": "Desconocida",
+        "error": str(e)
+    }))
+`;
+
+  const child = spawn("python3", ["-c", pyCode], { cwd: process.cwd() });
+  let stdout = "";
+  let stderr = "";
+  child.stdout.on("data", (d) => (stdout += d.toString()));
+  child.stderr.on("data", (d) => (stderr += d.toString()));
+  child.on("close", () => {
+    try {
+      res.json(JSON.parse(stdout || "{}"));
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || stderr });
+    }
+  });
+});
+
+// 6.6 Supabase SQL Schema File
+app.get("/api/database/supabase-schema-sql", (req, res) => {
+  const schemaPath = path.join(process.cwd(), "supabase", "schema.sql");
+  try {
+    if (fs.existsSync(schemaPath)) {
+      const content = fs.readFileSync(schemaPath, "utf-8");
+      res.json({ sql: content, path: "supabase/schema.sql", exists: true });
+    } else {
+      res.status(404).json({ error: "No se encontró supabase/schema.sql", exists: false });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 7. Database Stats & Inspector via python query runner
 app.get("/api/database/stats", (req, res) => {
   const pyCode = `

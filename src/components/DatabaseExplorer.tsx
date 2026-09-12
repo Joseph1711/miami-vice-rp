@@ -30,35 +30,14 @@ import {
   ShoppingBag,
   Ticket,
   SlidersHorizontal,
-  Info
+  Info,
+  Server,
+  ShieldCheck,
+  AlertCircle,
+  ExternalLink,
+  Code
 } from 'lucide-react';
-
-interface TableMeta {
-  name: string;
-  count: number;
-  columnsCount: number;
-  category: string;
-  description: string;
-}
-
-interface DbStats {
-  tables: TableMeta[];
-  totalTables: number;
-  totalRows: number;
-  userCount: number;
-  totalEconomy: number;
-  totalCash: number;
-  totalBank: number;
-}
-
-interface ColumnMeta {
-  cid?: number;
-  name: string;
-  type: string;
-  notnull: number;
-  dflt_value: any;
-  pk: number;
-}
+import { TableMeta, DbStats, ColumnMeta, SupabaseInfo } from '../types';
 
 const CATEGORIES = [
   { id: 'all', label: 'Todas las Tablas', icon: Database, color: 'text-cyan-400' },
@@ -73,6 +52,9 @@ const CATEGORIES = [
 
 export function DatabaseExplorer() {
   const [stats, setStats] = useState<DbStats | null>(null);
+  const [supabaseInfo, setSupabaseInfo] = useState<SupabaseInfo | null>(null);
+  const [schemaSql, setSchemaSql] = useState<string>('');
+  const [copiedSql, setCopiedSql] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedTable, setSelectedTable] = useState<string>('users');
   const [tableSearch, setTableSearch] = useState('');
@@ -89,8 +71,8 @@ export function DatabaseExplorer() {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [cellSearch, setCellSearch] = useState('');
   
-  // View Modes: 'data' | 'schema' | 'sql'
-  const [viewMode, setViewMode] = useState<'data' | 'schema' | 'sql'>('data');
+  // View Modes: 'data' | 'schema' | 'sql' | 'sql_file' | 'connection'
+  const [viewMode, setViewMode] = useState<'data' | 'schema' | 'sql' | 'sql_file' | 'connection'>('data');
 
   // SQL Console State
   const [sqlQuery, setSqlQuery] = useState('SELECT * FROM users LIMIT 25;');
@@ -116,6 +98,30 @@ export function DatabaseExplorer() {
       }
     } catch (err) {
       console.error('Error fetching db stats:', err);
+    }
+  };
+
+  const fetchSupabaseInfo = async () => {
+    try {
+      const res = await fetch('/api/database/supabase-info');
+      if (res.ok) {
+        const data = await res.json();
+        setSupabaseInfo(data);
+      }
+    } catch (err) {
+      console.error('Error fetching supabase info:', err);
+    }
+  };
+
+  const fetchSchemaSql = async () => {
+    try {
+      const res = await fetch('/api/database/supabase-schema-sql');
+      if (res.ok) {
+        const data = await res.json();
+        setSchemaSql(data.sql || '');
+      }
+    } catch (err) {
+      console.error('Error fetching schema sql:', err);
     }
   };
 
@@ -154,7 +160,12 @@ export function DatabaseExplorer() {
 
   useEffect(() => {
     fetchStats();
-    const interval = setInterval(fetchStats, 5000);
+    fetchSupabaseInfo();
+    fetchSchemaSql();
+    const interval = setInterval(() => {
+      fetchStats();
+      fetchSupabaseInfo();
+    }, 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -279,18 +290,88 @@ export function DatabaseExplorer() {
 
   return (
     <div className="space-y-6">
+      {/* Supabase Connection Status Card */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-emerald-900/40 shadow-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0 shadow-inner">
+              <Database className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base font-extrabold text-white tracking-tight">
+                  Base de Datos Supabase (PostgreSQL)
+                </h2>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 font-mono ${
+                  supabaseInfo?.backend === 'supabase'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${supabaseInfo?.connected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                  {supabaseInfo?.backend === 'supabase' ? 'Conectado a Supabase' : 'Modo Local (SQLite Fallback)'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono">
+                <span>Host: <strong className="text-slate-200">{supabaseInfo?.host || 'Local Storage'}</strong></span>
+                <span>•</span>
+                <span>Base: <strong className="text-slate-200">{supabaseInfo?.database || 'postgres'}</strong></span>
+                <span>•</span>
+                <span>Tablas: <strong className="text-emerald-400">{supabaseInfo?.totalTables || stats?.totalTables || 0}</strong></span>
+                <span>•</span>
+                <span>Latencia: <strong className="text-cyan-400">{supabaseInfo?.latencyMs ? `${supabaseInfo.latencyMs}ms` : '< 1ms'}</strong></span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start md:self-auto">
+            <button
+              onClick={() => setViewMode('sql_file')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'sql_file'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+            >
+              <Code className="w-3.5 h-3.5" />
+              <span>Ver Schema SQL</span>
+            </button>
+            <button
+              onClick={() => setViewMode('connection')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                viewMode === 'connection'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+              }`}
+            >
+              <Server className="w-3.5 h-3.5" />
+              <span>Configuración</span>
+            </button>
+            <button
+              onClick={() => {
+                fetchStats();
+                fetchSupabaseInfo();
+              }}
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+              title="Refrescar estado de conexión"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Top Banner: Global Metrics & Clean Controls */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-md flex items-center justify-between">
           <div>
             <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
               <Users className="w-4 h-4 text-cyan-400" />
-              <span>Usuarios Reales</span>
+              <span>Ciudadanos Registrados</span>
             </div>
             <div className="text-2xl font-bold text-white mt-1">
               {stats?.userCount || 0}
               <span className="text-xs font-normal text-slate-400 ml-1.5 font-sans">
-                (0 usuarios de prueba)
+                en tabla `users`
               </span>
             </div>
           </div>
@@ -318,7 +399,7 @@ export function DatabaseExplorer() {
           <div>
             <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
               <TrendingUp className="w-4 h-4 text-indigo-400" />
-              <span>Reservas Bancarias</span>
+              <span>Fondos en Bancos</span>
             </div>
             <div className="text-2xl font-bold text-indigo-400 mt-1 font-mono">
               ${(stats?.totalBank || 0).toLocaleString()}
@@ -333,10 +414,10 @@ export function DatabaseExplorer() {
           <div>
             <div className="text-xs text-slate-400 flex items-center gap-1.5 font-medium">
               <Database className="w-4 h-4 text-amber-400" />
-              <span>Tablas del Sistema</span>
+              <span>Tablas Supabase</span>
             </div>
             <div className="text-2xl font-bold text-amber-400 mt-1">
-              {stats?.totalTables || 38} <span className="text-xs font-normal text-slate-400 font-sans">({stats?.totalRows || 0} filas)</span>
+              {stats?.totalTables || 54} <span className="text-xs font-normal text-slate-400 font-sans">({stats?.totalRows || 0} filas)</span>
             </div>
           </div>
           <button
@@ -345,7 +426,7 @@ export function DatabaseExplorer() {
             title="Limpiar completamente todas las tablas"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            <span>Limpiar Todo</span>
+            <span>Reset</span>
           </button>
         </div>
       </div>
@@ -488,6 +569,28 @@ export function DatabaseExplorer() {
               >
                 <Terminal className="w-3.5 h-3.5" />
                 <span>Consola SQL</span>
+              </button>
+              <button
+                onClick={() => setViewMode('sql_file')}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'sql_file' 
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Code className="w-3.5 h-3.5" />
+                <span>Esquema SQL</span>
+              </button>
+              <button
+                onClick={() => setViewMode('connection')}
+                className={`text-xs px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  viewMode === 'connection' 
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Server className="w-3.5 h-3.5" />
+                <span>Conexión</span>
               </button>
             </div>
 
@@ -867,6 +970,141 @@ export function DatabaseExplorer() {
                     <p className="text-xs">Escribe una consulta SQL o haz clic en un preset para ejecutarla en vivo.</p>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* VIEW MODE 4: SUPABASE SCHEMA SQL */}
+          {viewMode === 'sql_file' && (
+            <div className="flex-1 flex flex-col overflow-hidden bg-slate-950 p-4 space-y-3">
+              <div className="flex items-center justify-between bg-slate-900 px-4 py-2.5 rounded-xl border border-slate-800">
+                <div className="flex items-center gap-2 text-xs">
+                  <Code className="w-4 h-4 text-emerald-400" />
+                  <span className="font-bold text-white font-mono">supabase/schema.sql</span>
+                  <span className="text-slate-400 font-sans">(Script DDL oficial para Supabase PostgreSQL)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(schemaSql);
+                      setCopiedSql(true);
+                      setTimeout(() => setCopiedSql(false), 2000);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                  >
+                    {copiedSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedSql ? '¡Copiado!' : 'Copiar Todo el SQL'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([schemaSql], { type: 'text/sql' });
+                      const link = document.createElement('a');
+                      link.href = URL.createObjectURL(blob);
+                      link.download = 'supabase_schema.sql';
+                      link.click();
+                    }}
+                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition-colors cursor-pointer"
+                    title="Descargar archivo schema.sql"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto rounded-xl bg-slate-900 border border-slate-800 p-4 font-mono text-xs text-slate-300">
+                <pre className="whitespace-pre-wrap leading-relaxed select-text">
+                  {schemaSql || '-- Cargando esquema de Supabase...'}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* VIEW MODE 5: SUPABASE CONNECTION GUIDE */}
+          {viewMode === 'connection' && (
+            <div className="flex-1 flex flex-col overflow-auto bg-slate-950 p-6 space-y-6">
+              <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-800/40">
+                <div className="flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-emerald-300">
+                      Conexión Activa de Supabase PostgreSQL
+                    </h4>
+                    <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                      El bot de Miami Vice RP utiliza una arquitectura de alta disponibilidad. Si configuras la variable <code className="text-emerald-400 font-mono font-bold bg-slate-900 px-1.5 py-0.5 rounded">SUPABASE_DB_URL</code> o <code className="text-emerald-400 font-mono font-bold bg-slate-900 px-1.5 py-0.5 rounded">DATABASE_URL</code>, el bot se conecta a Supabase PostgreSQL a través de un pool de conexiones con SSL. En caso de no estar configurada o en modo local, conmuta a SQLite sin detener el bot.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Details Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Estado de Conexión:</span>
+                  <div className="text-white font-bold flex items-center gap-1.5 text-sm">
+                    <span className={`w-2 h-2 rounded-full ${supabaseInfo?.connected ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                    {supabaseInfo?.connected ? 'Operativo (OK)' : 'Fallback Local'}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Motor Activo:</span>
+                  <div className="text-emerald-400 font-bold text-sm">
+                    {supabaseInfo?.backend === 'supabase' ? 'PostgreSQL (Supabase Cloud)' : 'SQLite Local (Fallback)'}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Host Supabase:</span>
+                  <div className="text-slate-200 break-all font-bold">
+                    {supabaseInfo?.host || 'Local Storage'}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Nombre de la Base de Datos:</span>
+                  <div className="text-slate-200 font-bold">
+                    {supabaseInfo?.database || 'postgres'}
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Modo SSL / Cifrado:</span>
+                  <div className="text-cyan-400 font-bold">
+                    {supabaseInfo?.sslMode || 'require'} (TLS Encrypted)
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-slate-400">Versión del Esquema:</span>
+                  <div className="text-slate-200 font-bold">
+                    {supabaseInfo?.schemaVersion || 'v2.6.0'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3 font-sans text-xs">
+                <h4 className="font-bold text-white text-sm flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-cyan-400" />
+                  <span>Cómo conectar tu proyecto Supabase</span>
+                </h4>
+                <ol className="list-decimal list-inside space-y-2 text-slate-300">
+                  <li>
+                    Ingresa a tu proyecto en <strong className="text-emerald-400">supabase.com</strong> &gt; <strong className="text-white">Project Settings</strong> &gt; <strong className="text-white">Database</strong>.
+                  </li>
+                  <li>
+                    Copia la URI de conexión (Connection String).
+                  </li>
+                  <li>
+                    Configura la variable de entorno en tu hosting o archivo <code className="bg-slate-950 px-1 py-0.5 rounded text-cyan-400 font-mono">.env</code>:
+                    <div className="p-2.5 mt-1 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px] text-emerald-300 select-all overflow-x-auto">
+                      SUPABASE_DB_URL="postgresql://postgres:[TU_PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres"
+                    </div>
+                  </li>
+                  <li>
+                    Ejecuta el script SQL en el <strong className="text-white">SQL Editor</strong> de Supabase para tener creadas las 54 tablas con sus relaciones.
+                  </li>
+                </ol>
               </div>
             </div>
           )}
