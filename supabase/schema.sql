@@ -477,3 +477,34 @@ CREATE TABLE IF NOT EXISTS criminal_missions (
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi';
 UPDATE users SET profile_note = 'Made By Joshi' WHERE profile_note IS NULL OR profile_note = 'Made By Joseph';
+
+-- =====================
+-- SERVER STATUS & VOTING
+-- =====================
+CREATE TABLE IF NOT EXISTS server_status (
+    guild_id TEXT PRIMARY KEY,
+    status TEXT DEFAULT 'CLOSED',
+    server_code TEXT DEFAULT 'MVERP',
+    updated_by TEXT,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS server_votes (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    channel_id TEXT NOT NULL,
+    message_id TEXT NOT NULL,
+    creator_id TEXT NOT NULL,
+    status TEXT DEFAULT 'active',
+    duration_minutes INTEGER DEFAULT 5,
+    ends_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS server_vote_entries (
+    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+    discord_id TEXT NOT NULL,
+    choice TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (vote_id, discord_id)
+);

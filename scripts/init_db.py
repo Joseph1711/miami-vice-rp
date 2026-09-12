@@ -718,6 +718,14 @@ CREATE TABLE IF NOT EXISTS server_user_votes (
     UNIQUE(vote_id, discord_id)
 );
 
+CREATE TABLE IF NOT EXISTS server_vote_entries (
+    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+    discord_id TEXT NOT NULL,
+    choice TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (vote_id, discord_id)
+);
+
 -- =====================
 -- POLICE CRIMINAL RECORDS & CITATIONS
 -- =====================
@@ -775,16 +783,33 @@ def _check_tables_exist():
 
 
 def _ensure_profile_note():
-    from bot.db import execute
+    from bot.db import execute, is_postgres
+    cols = [
+        ("users", "profile_note", "TEXT DEFAULT 'Made By Joshi'"),
+        ("users", "last_salary", "TIMESTAMP"),
+        ("guild_config", "admin_role_id", "TEXT"),
+        ("guild_config", "work_logs_channel_id", "TEXT"),
+        ("guild_config", "applications_channel_id", "TEXT")
+    ]
+    if is_postgres():
+        for tbl, col, ctype in cols:
+            try:
+                execute(f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {ctype}")
+            except Exception:
+                pass
+    else:
+        for tbl, col, ctype in cols:
+            try:
+                info = execute(f"PRAGMA table_info({tbl})", fetch="all") or []
+                existing = {r["name"] for r in info if "name" in r}
+                if col not in existing:
+                    execute(f"ALTER TABLE {tbl} ADD COLUMN {col} {ctype}")
+            except Exception:
+                pass
     try:
-        execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'")
-        execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_salary TIMESTAMP")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS admin_role_id TEXT")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS work_logs_channel_id TEXT")
-        execute("ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS applications_channel_id TEXT")
         execute("UPDATE users SET profile_note='Made By Joshi' WHERE profile_note IS NULL OR profile_note='Made By Joseph'")
-    except Exception as e:
-        logger.warning(f"Error al agregar columnas adicionales: {e}")
+    except Exception:
+        pass
 
 
 def init_db():

@@ -140,6 +140,66 @@ export const FILE_PATCHES: FilePatch[] = [
 
 export const SIMULATED_COMMANDS: SimulatedCommand[] = [
   {
+    "command": "/abrir servidor",
+    "category": "Control de Servidor",
+    "cog": "server_control",
+    "description": "Abrir oficialmente el servidor mostrando los usuarios que votaron",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] Comando /abrir servidor no mostraba la lista de usuarios que votaron en la apertura comunitaria.",
+      "discordStatus": "⚠️ Solo mostraba código sin detalles de votantes",
+      "timeElapsed": "25 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] /abrir servidor -> Estado OPEN -> Consultada tabla server_vote_entries -> Embed generado con desglose de usuarios a favor y en contra.",
+      "discordStatus": "✅ Servidor abierto y votantes anunciados",
+      "timeElapsed": "28 ms",
+      "embedTitle": "🟢 SERVIDOR ABIERTO",
+      "embedContent": "Miami Vice Roleplay está oficialmente abierto.\n\nCódigo: MVERP\n\n👥 Personas que Votaron:\n🟢 A favor (3): @Carlos_RP, @Valentin_Vice, @Sofía_Miami\n🔴 En contra (1): @Marcos_G"
+    }
+  },
+  {
+    "command": "/abrir-servidor",
+    "category": "Control de Servidor",
+    "cog": "server_control",
+    "description": "Abrir servidor anunciando código y personas que votaron",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[ERROR] El comando /abrir-servidor omitía los votantes de la consulta previa.",
+      "discordStatus": "⚠️ Solo mostraba código sin detalles de votantes",
+      "timeElapsed": "25 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] /abrir-servidor ejecutado -> Recuperados votos de server_vote_entries -> Menciones de votantes renderizadas en el Embed.",
+      "discordStatus": "✅ Servidor abierto y votantes anunciados",
+      "timeElapsed": "26 ms",
+      "embedTitle": "🟢 SERVIDOR ABIERTO",
+      "embedContent": "Miami Vice Roleplay está oficialmente abierto.\n\nCódigo: MVERP\n\n👥 Personas que Votaron:\n🟢 A favor (3): @Carlos_RP, @Valentin_Vice, @Sofía_Miami\n🔴 En contra (1): @Marcos_G"
+    }
+  },
+  {
+    "command": "/votacion-servidor",
+    "category": "Control de Servidor",
+    "cog": "server_control",
+    "description": "Iniciar votación comunitaria con botones y registro individual",
+    "beforeBehavior": {
+      "state": "silent_crash",
+      "log": "[WARN] Los votos no persistían registros por usuario para auditoría posterior.",
+      "discordStatus": "⚠️ Votos volátiles",
+      "timeElapsed": "30 ms"
+    },
+    "afterBehavior": {
+      "state": "success",
+      "log": "[INFO] Votación iniciada con registro en server_votes y server_vote_entries -> Botones interactivos activos.",
+      "discordStatus": "✅ Votación iniciada con persistencia de votantes",
+      "timeElapsed": "22 ms",
+      "embedTitle": "🗳️ Votación Oficial de Apertura",
+      "embedContent": "¿Deseas que el servidor de Miami Vice Roleplay abra en este momento?"
+    }
+  },
+  {
     "command": "/admin economia dar",
     "category": "Administración",
     "cog": "admin",

@@ -14,6 +14,8 @@ from bot.services.server_status import (
     create_server_vote,
     get_active_vote_by_message,
     get_active_vote_by_guild,
+    get_latest_vote_for_guild,
+    get_vote_voters,
     record_user_vote,
     remove_user_vote,
     get_vote_results,
@@ -102,6 +104,8 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
             return
 
         # Construir Embed de resultados oficiales
+        voters_info = await get_vote_voters(vote_id)
+
         embed = discord.Embed(
             title="📊 Resultado de la votación",
             description="La votación oficial para la apertura de **Miami Vice Roleplay** ha concluido.",
@@ -111,8 +115,17 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         embed.add_field(name="🔴 En contra", value=f"**{results['no']}**", inline=True)
         embed.add_field(name="Total de votos", value=f"**{results['total']}**", inline=True)
 
+        if voters_info and voters_info["total"] > 0:
+            yes_list = self._format_voters_display(voters_info["yes_voters"])
+            no_list = self._format_voters_display(voters_info["no_voters"])
+            embed.add_field(
+                name="👥 Personas que Votaron",
+                value=f"🟢 **A favor ({voters_info['yes_count']}):**\n{yes_list}\n\n🔴 **En contra ({voters_info['no_count']}):**\n{no_list}",
+                inline=False
+            )
+
         if results["winner"] == "yes":
-            verdict = "🟢 **Resultado Favorable:** La comunidad ha votado a favor de abrir el servidor.\n\n*El servidor puede ser abierto por el Staff cuando lo disponga mediante `/abrir-servidor`.*"
+            verdict = "🟢 **Resultado Favorable:** La comunidad ha votado a favor de abrir el servidor.\n\n*El servidor puede ser abierto por el Staff cuando lo disponga mediante `/abrir servidor`.*"
         elif results["winner"] == "no":
             verdict = "🔴 **Resultado Negativo:** La comunidad ha decidido que el servidor permanezca cerrado.\n\n*El servidor permanecerá cerrado por el momento.*"
         else:
@@ -214,12 +227,46 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         except Exception:
             pass
 
+    def _format_voters_display(self, uids: list, max_chars: int = 380) -> str:
+        """Formatea una lista de IDs de Discord a menciones legibles respetando el límite de caracteres."""
+        if not uids:
+            return "*Ninguno*"
+        mentions = [f"<@{uid}>" for uid in uids]
+        items = []
+        cur = 0
+        for i, m in enumerate(mentions):
+            cost = len(m) + (2 if items else 0)
+            if cur + cost + 15 > max_chars:
+                items.append(f"*(+{len(mentions) - i} más)*")
+                break
+            items.append(m)
+            cur += cost
+        return ", ".join(items)
+
     # =========================================================================
-    # COMANDO 1: /abrir-servidor
+    # COMANDO 1: /abrir-servidor y /abrir servidor
     # =========================================================================
+    abrir_group = app_commands.Group(name="abrir", description="Comandos de apertura para Miami Vice RP")
+
+    @abrir_group.command(
+        name="servidor",
+        description="Abrir oficialmente el servidor de Roleplay Miami Vice (MVERP) mostrando votantes"
+    )
+    @app_commands.describe(
+        canal="Canal donde se publicará el anuncio oficial (opcional, por defecto el canal actual)",
+        anuncio_extra="Mensaje o notas adicionales para los jugadores (opcional)"
+    )
+    async def abrir_servidor_group(
+        self,
+        interaction: discord.Interaction,
+        canal: discord.TextChannel = None,
+        anuncio_extra: str = None
+    ):
+        await self.abrir_servidor(interaction, canal, anuncio_extra)
+
     @app_commands.command(
         name="abrir-servidor",
-        description="Abrir oficialmente el servidor de Roleplay Miami Vice (MVERP)"
+        description="Abrir oficialmente el servidor de Roleplay Miami Vice (MVERP) mostrando votantes"
     )
     @app_commands.describe(
         canal="Canal donde se publicará el anuncio oficial (opcional, por defecto el canal actual)",
@@ -247,6 +294,19 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
             server_code=SERVER_CODE
         )
 
+        # Consultar la votación comunitaria (activa o la más reciente realizada)
+        active_vote = await get_active_vote_by_guild(gid)
+        target_vote = None
+        if active_vote:
+            await close_server_vote(active_vote["id"])
+            target_vote = active_vote
+        else:
+            target_vote = await get_latest_vote_for_guild(gid)
+
+        voters_info = None
+        if target_vote:
+            voters_info = await get_vote_voters(target_vote["id"])
+
         # Crear Embed con el diseño requerido
         embed = discord.Embed(
             title="🟢 SERVIDOR ABIERTO",
@@ -267,6 +327,28 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         if anuncio_extra:
             embed.add_field(name="📢 Información Adicional", value=anuncio_extra, inline=False)
 
+        # Mostrar a las personas que votaron en el comando
+        if voters_info and voters_info["total"] > 0:
+            yes_mentions = self._format_voters_display(voters_info["yes_voters"])
+            no_mentions = self._format_voters_display(voters_info["no_voters"])
+
+            voters_value = (
+                f"🗳️ **Total de votantes registrados:** `{voters_info['total']}`\n\n"
+                f"🟢 **A favor ({voters_info['yes_count']}):**\n{yes_mentions}\n\n"
+                f"🔴 **En contra ({voters_info['no_count']}):**\n{no_mentions}"
+            )
+            embed.add_field(
+                name="👥 Personas que Votaron para la Apertura",
+                value=voters_value,
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="👥 Personas que Votaron",
+                value="*Apertura directa ejecutada por el Staff (no se registraron votos en una votación previa).* ",
+                inline=False
+            )
+
         embed.set_image(url="https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&auto=format&fit=crop&q=80")
         embed.set_footer(
             text="Miami Vice Roleplay (MVERP) • Operaciones Iniciadas",
@@ -277,8 +359,12 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         # Publicar anuncio oficial
         await target_channel.send(content="@everyone" if interaction.guild else None, embed=embed)
 
+        summary_voters = ""
+        if voters_info and voters_info["total"] > 0:
+            summary_voters = f"\n🗳️ **Votos contabilizados ({voters_info['total']}):** 🟢 {voters_info['yes_count']} a favor | 🔴 {voters_info['no_count']} en contra."
+
         await interaction.followup.send(
-            f"✅ El servidor **Miami Vice Roleplay** ha sido marcado como **🟢 ABIERTO** con código `{SERVER_CODE}` y anunciado en {target_channel.mention}.",
+            f"✅ El servidor **Miami Vice Roleplay** ha sido marcado como **🟢 ABIERTO** con código `{SERVER_CODE}` y anunciado en {target_channel.mention}.{summary_voters}",
             ephemeral=True
         )
 

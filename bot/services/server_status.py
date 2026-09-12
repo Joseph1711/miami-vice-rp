@@ -176,3 +176,47 @@ async def close_server_vote(vote_id: str) -> dict:
         (str(vote_id),)
     )
     return await get_vote_results(vote_id)
+
+
+async def get_latest_vote_for_guild(guild_id: str) -> dict:
+    """
+    Obtiene la votación más reciente del servidor (ya sea activa, cerrada o concluida).
+    """
+    row = await aexecute(
+        "SELECT * FROM server_votes WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1",
+        (str(guild_id),),
+        fetch="one"
+    )
+    return dict(row) if row else None
+
+
+async def get_vote_voters(vote_id: str) -> dict:
+    """
+    Obtiene los IDs y selección de todos los usuarios que participaron en una votación.
+    Retorna un diccionario detallado con listas de IDs para 'yes' y 'no', y totales.
+    """
+    rows = await aexecute(
+        "SELECT discord_id, choice, created_at FROM server_vote_entries WHERE vote_id = $1 ORDER BY created_at ASC",
+        (str(vote_id),),
+        fetch="all"
+    ) or []
+
+    yes_voters = []
+    no_voters = []
+    for r in rows:
+        uid = str(r["discord_id"])
+        c = str(r.get("choice", "")).lower()
+        if c == "yes":
+            yes_voters.append(uid)
+        elif c == "no":
+            no_voters.append(uid)
+
+    total_voters = yes_voters + no_voters
+    return {
+        "yes_voters": yes_voters,
+        "no_voters": no_voters,
+        "total_voters": total_voters,
+        "yes_count": len(yes_voters),
+        "no_count": len(no_voters),
+        "total": len(total_voters)
+    }
