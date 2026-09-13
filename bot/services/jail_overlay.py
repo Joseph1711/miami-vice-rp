@@ -309,22 +309,30 @@ async def resolve_roblox_user_id(identifier: str) -> str | None:
     return await loop.run_in_executor(None, _resolve_sync)
 
 
+ROBLOX_DEFAULT_AVATAR = "https://tr.rbxcdn.com/30DAY-AvatarHeadshot-B597B0D33E1DEBC30656208FBCBF9549-Png/420/420/AvatarHeadshot/Png/noFilter"
+
+
 async def get_jailed_roblox_avatar(
+    roblox_avatar_url: str | None = None,
     roblox_identifier: str | None = None,
     fallback_avatar_url: str | None = None
 ) -> tuple[discord.File | None, str | None]:
     """
-    Obtains the citizen's Roblox avatar headshot, applies realistic prison bars over it,
-    and returns a discord.File ready to be attached to the arrest embed as thumbnail.
+    Obtains the citizen's Roblox avatar headshot strictly from their DNI or Roblox API,
+    applies realistic prison bars over it, and returns a discord.File ready to be attached to the arrest embed as thumbnail.
 
     Returns:
         tuple (discord.File or None, attachment_uri_or_url)
     """
     image_bytes = None
 
-    # 1. Try to fetch Roblox avatar headshot
-    if roblox_identifier:
-        user_id = await resolve_roblox_user_id(roblox_identifier)
+    # 1. Direct Roblox avatar URL from citizen's DNI
+    if roblox_avatar_url and str(roblox_avatar_url).strip().startswith("http"):
+        image_bytes = await fetch_image_bytes(str(roblox_avatar_url).strip())
+
+    # 2. Try to fetch Roblox avatar headshot from Roblox API if not loaded or failed
+    if not image_bytes and roblox_identifier:
+        user_id = await resolve_roblox_user_id(str(roblox_identifier).strip())
         if user_id:
             thumb_api = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size=420x420&format=Png&isCircular=false"
             raw_thumb_data = None
@@ -353,11 +361,15 @@ async def get_jailed_roblox_avatar(
                 if t_list and t_list[0].get("imageUrl"):
                     image_bytes = await fetch_image_bytes(t_list[0]["imageUrl"])
 
-    # 2. Fallback to Discord avatar or DNI avatar if Roblox avatar could not be retrieved
-    if not image_bytes and fallback_avatar_url:
-        image_bytes = await fetch_image_bytes(fallback_avatar_url)
+    # 3. Fallback avatar URL if specifically provided and starts with http (Roblox only)
+    if not image_bytes and fallback_avatar_url and str(fallback_avatar_url).strip().startswith("http"):
+        image_bytes = await fetch_image_bytes(str(fallback_avatar_url).strip())
 
-    # 3. If image bytes are found, apply jail bars in a worker thread
+    # 4. Default Roblox avatar headshot placeholder if no profile image could be retrieved
+    if not image_bytes:
+        image_bytes = await fetch_image_bytes(ROBLOX_DEFAULT_AVATAR)
+
+    # 5. Apply prison cell bars in a worker thread
     if image_bytes:
         try:
             loop = asyncio.get_running_loop()
@@ -372,4 +384,4 @@ async def get_jailed_roblox_avatar(
             logger.error(f"[JailOverlay] Error aplicando rejas de prisión: {e}")
 
     # Return fallback if rendering failed
-    return None, fallback_avatar_url
+    return None, roblox_avatar_url or ROBLOX_DEFAULT_AVATAR

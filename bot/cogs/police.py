@@ -83,18 +83,18 @@ class Police(commands.Cog, name="Policía & Justicia"):
         )
         await interaction.followup.send(embed=e, ephemeral=True)
 
-    @policia.command(name="arrestar", description="Arrestar y procesar judicialmente a un sospechoso (Solo Policía)")
+    @policia.command(name="arrestar", description="Arrestar y procesar judicialmente a un infractor (Solo Policía)")
     @app_commands.describe(
-        usuario="Sospechoso o ciudadano a arrestar",
-        motivo="Motivo o cargos penales del arresto",
-        tiempo="Tiempo de condena o detención (ej: 15m, 30 minutos)",
-        descripcion="Descripción detallada de los hechos u operativo",
-        encontrado="Objetos o pertenencias encontradas durante la revisión",
-        incautado="Armas, sustancias o bienes incautados",
-        derechos="¿Se le leyeron los derechos Miranda al detenido?",
-        estado_fisico="Estado físico de salud del detenido",
-        oficial_nombre="Nombre, rango o placa del oficial a cargo (opcional)",
-        prueba="Adjunta un archivo o captura de prueba del arresto (opcional)"
+        usuario="Sospechoso o ciudadano a arrestar (obligatorio)",
+        motivo="Motivo o cargos penales del arresto (obligatorio)",
+        tiempo="Tiempo de condena o detención ej: 15m, 30 minutos (obligatorio)",
+        descripcion="Descripción detallada de los hechos u operativo (obligatorio)",
+        encontrado="Objetos o pertenencias encontradas durante la revisión (obligatorio)",
+        incautado="Armas, sustancias o bienes incautados (obligatorio)",
+        derechos="¿Se le leyeron los derechos Miranda al detenido? (obligatorio)",
+        estado_fisico="Estado físico de salud del detenido (obligatorio)",
+        oficial_nombre="Nombre, rango o placa del oficial a cargo (obligatorio)",
+        prueba="Adjunta archivo o captura de prueba del arresto (obligatorio)"
     )
     @app_commands.choices(
         derechos=[
@@ -115,12 +115,12 @@ class Police(commands.Cog, name="Policía & Justicia"):
         motivo: str,
         tiempo: str,
         descripcion: str,
-        encontrado: str = "Ninguno / Pertenencias de rutina",
-        incautado: str = "Nada incautado",
-        derechos: app_commands.Choice[str] = None,
-        estado_fisico: app_commands.Choice[str] = None,
-        oficial_nombre: str = None,
-        prueba: discord.Attachment = None
+        encontrado: str,
+        incautado: str,
+        derechos: app_commands.Choice[str],
+        estado_fisico: app_commands.Choice[str],
+        oficial_nombre: str,
+        prueba: discord.Attachment
     ):
         await interaction.response.defer()
         if not await is_police_authorized(interaction):
@@ -145,7 +145,7 @@ class Police(commands.Cog, name="Policía & Justicia"):
         derechos_display = "✅ **Sí** — Leídos oportunamente conforme a la ley" if se_leyeron_derechos else "❌ **NO** — No se le leyeron los derechos al detenido"
 
         # Resolución de estado físico
-        estado_display = estado_fisico.value if hasattr(estado_fisico, "value") else (str(estado_fisico).strip() if estado_fisico else "🟢 Ileso / En buen estado")
+        estado_display = estado_fisico.value if hasattr(estado_fisico, "value") else str(estado_fisico).strip()
 
         # Oficial a cargo
         oficial_display = oficial_nombre.strip() if oficial_nombre and oficial_nombre.strip() else interaction.user.display_name
@@ -161,16 +161,19 @@ class Police(commands.Cog, name="Policía & Justicia"):
         
         # Obtener DNI activo del detenido
         dni_rec = await aexecute(
-            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 1",
+            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY is_active DESC, updated_at DESC, created_at DESC LIMIT 1",
             (gid, c_uid), fetch="one"
         )
         dni_num = dni_rec.get("dni_number", "S/D") if dni_rec else "Sin DNI"
         nombre_ic = dni_rec.get("full_name", usuario.display_name) if dni_rec else usuario.display_name
 
-        # Buscar usuario/ID de Roblox vinculado
+        # Obtener estrictamente la foto y perfil de Roblox del DNI
+        roblox_avatar_url = None
         roblox_id = None
         roblox_username = None
+
         if dni_rec:
+            roblox_avatar_url = dni_rec.get("avatar_url")
             roblox_id = dni_rec.get("roblox_id")
             roblox_username = dni_rec.get("roblox_username")
 
@@ -184,11 +187,10 @@ class Police(commands.Cog, name="Policía & Justicia"):
                 roblox_id = roblox_id or u_row.get("roblox_id")
                 roblox_username = roblox_username or u_row.get("roblox_username")
 
-        # Generar foto de perfil de Roblox entre rejas de prisión
-        fallback_avatar = dni_rec.get("avatar_url") if (dni_rec and dni_rec.get("avatar_url")) else usuario.display_avatar.with_format("png").url
+        # Generar foto de perfil de Roblox del DNI entre rejas de prisión (NUNCA Discord)
         jailed_file, thumbnail_uri = await get_jailed_roblox_avatar(
-            roblox_identifier=roblox_id or roblox_username,
-            fallback_avatar_url=fallback_avatar
+            roblox_avatar_url=roblox_avatar_url,
+            roblox_identifier=roblox_id or roblox_username
         )
 
         # Registrar arresto en criminal_records
