@@ -465,6 +465,8 @@ try:
         "criminal_missions": ("crime_drugs", "Misiones y golpes delictivos"),
         "drug_operations": ("crime_drugs", "Laboratorios y cultivos clandestinos"),
         "money_laundering": ("crime_drugs", "Operaciones de lavado de dinero"),
+        "criminal_records": ("crime_drugs", "Expedientes penales, arrestos, lectura de derechos, objetos incautados y multas policiales"),
+        "guild_configs": ("users_config", "Configuración de roles policiales y permisos del servidor"),
         "items": ("market_inventory", "Catálogo maestro de objetos e ítems"),
         "user_inventory": ("market_inventory", "Inventarios individuales de usuarios"),
         "shop": ("market_inventory", "Artículos en la tienda general"),

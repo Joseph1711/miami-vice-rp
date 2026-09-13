@@ -508,3 +508,37 @@ CREATE TABLE IF NOT EXISTS server_vote_entries (
     created_at TIMESTAMP DEFAULT NOW(),
     PRIMARY KEY (vote_id, discord_id)
 );
+
+-- =====================
+-- POLICE & CRIMINAL RECORDS
+-- =====================
+CREATE TABLE IF NOT EXISTS criminal_records (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    crime_type TEXT NOT NULL,
+    description TEXT NOT NULL,
+    fine_amount NUMERIC DEFAULT 0,
+    jail_time_minutes INTEGER DEFAULT 0,
+    officer_id TEXT NOT NULL,
+    officer_name TEXT,
+    status TEXT DEFAULT 'arrested',
+    paid BOOLEAN DEFAULT FALSE,
+    paid_at TIMESTAMP,
+    items_found TEXT,
+    items_seized TEXT,
+    rights_read BOOLEAN DEFAULT TRUE,
+    physical_state TEXT DEFAULT 'Ileso',
+    evidence_url TEXT,
+    roblox_username TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS guild_configs (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT UNIQUE NOT NULL,
+    police_role_ids TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+

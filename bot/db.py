@@ -163,6 +163,44 @@ def _ensure_schema_migrations(conn):
                 cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS age INTEGER DEFAULT 18")
                 cursor.execute("ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()")
                 cursor.execute("""
+                CREATE TABLE IF NOT EXISTS criminal_records (
+                    id TEXT PRIMARY KEY,
+                    guild_id TEXT NOT NULL,
+                    discord_id TEXT NOT NULL,
+                    crime_type TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    fine_amount NUMERIC DEFAULT 0,
+                    jail_time_minutes INTEGER DEFAULT 0,
+                    officer_id TEXT NOT NULL,
+                    officer_name TEXT,
+                    status TEXT DEFAULT 'arrested',
+                    paid BOOLEAN DEFAULT FALSE,
+                    paid_at TIMESTAMP,
+                    items_found TEXT,
+                    items_seized TEXT,
+                    rights_read BOOLEAN DEFAULT TRUE,
+                    physical_state TEXT DEFAULT 'Ileso',
+                    evidence_url TEXT,
+                    roblox_username TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS guild_configs (
+                    id TEXT PRIMARY KEY,
+                    guild_id TEXT UNIQUE NOT NULL,
+                    police_role_ids TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_found TEXT")
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_seized TEXT")
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS rights_read BOOLEAN DEFAULT TRUE")
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS physical_state TEXT DEFAULT 'Ileso'")
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS evidence_url TEXT")
+                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS roblox_username TEXT")
+                cursor.execute("""
                 CREATE TABLE IF NOT EXISTS update_config (
                     id TEXT PRIMARY KEY,
                     guild_id TEXT UNIQUE NOT NULL,
@@ -278,6 +316,53 @@ def _ensure_schema_migrations(conn):
                     conn.execute("ALTER TABLE auctions ADD COLUMN quantity INTEGER DEFAULT 1")
                 if "starting_price" not in existing_auc:
                     conn.execute("ALTER TABLE auctions ADD COLUMN starting_price NUMERIC DEFAULT 0")
+
+            # criminal_records check
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS criminal_records (
+                id TEXT PRIMARY KEY,
+                guild_id TEXT NOT NULL,
+                discord_id TEXT NOT NULL,
+                crime_type TEXT NOT NULL,
+                description TEXT NOT NULL,
+                fine_amount NUMERIC DEFAULT 0,
+                jail_time_minutes INTEGER DEFAULT 0,
+                officer_id TEXT NOT NULL,
+                officer_name TEXT,
+                status TEXT DEFAULT 'arrested',
+                paid BOOLEAN DEFAULT 0,
+                paid_at TIMESTAMP,
+                items_found TEXT,
+                items_seized TEXT,
+                rights_read BOOLEAN DEFAULT 1,
+                physical_state TEXT DEFAULT 'Ileso',
+                evidence_url TEXT,
+                roblox_username TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS guild_configs (
+                id TEXT PRIMARY KEY,
+                guild_id TEXT UNIQUE NOT NULL,
+                police_role_ids TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            cursor_cr = conn.execute("PRAGMA table_info(criminal_records)")
+            existing_cr = {row[1] for row in cursor_cr.fetchall()}
+            if len(existing_cr) > 0:
+                for col_name, col_type, default_val in [
+                    ("items_found", "TEXT", "''"),
+                    ("items_seized", "TEXT", "''"),
+                    ("rights_read", "BOOLEAN", "1"),
+                    ("physical_state", "TEXT", "'Ileso'"),
+                    ("evidence_url", "TEXT", "NULL"),
+                    ("roblox_username", "TEXT", "NULL")
+                ]:
+                    if col_name not in existing_cr:
+                        conn.execute(f"ALTER TABLE criminal_records ADD COLUMN {col_name} {col_type} DEFAULT {default_val}")
 
             # update_config table
             conn.execute("""

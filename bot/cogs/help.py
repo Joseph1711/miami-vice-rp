@@ -38,7 +38,7 @@ HELP_CATEGORIES = {
         "emoji": "👮",
         "label": "Policía & Seguridad Pública",
         "commands": [
-            ("/policia arrestar @ciudadano motivo [tiempo] [fianza]", "Arrestar y procesar judicialmente a un infractor"),
+            ("/policia arrestar @usuario motivo tiempo descripcion [encontrado] [incautado] [derechos] [estado_fisico] [oficial_nombre] [prueba]", "Procesar arresto oficial con avatar de Roblox entre rejas, lectura de derechos y cateo"),
             ("/policia multar @ciudadano monto motivo", "Emitir y cobrar una multa/infracción a un ciudadano"),
             ("/policia antecedentes @ciudadano", "Consultar el historial delictivo, multas y arrestos de un usuario"),
             ("/policia mis_multas", "Consultar tus multas pendientes, historial y fianzas fijadas"),

@@ -742,6 +742,12 @@ CREATE TABLE IF NOT EXISTS criminal_records (
     status TEXT DEFAULT 'arrested',
     paid BOOLEAN DEFAULT FALSE,
     paid_at TIMESTAMP,
+    items_found TEXT,
+    items_seized TEXT,
+    rights_read BOOLEAN DEFAULT TRUE,
+    physical_state TEXT DEFAULT 'Ileso',
+    evidence_url TEXT,
+    roblox_username TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
