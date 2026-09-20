@@ -27,6 +27,23 @@ from bot.services.server_status import (
 logger = logging.getLogger("bot.cogs.server_control")
 
 
+def _format_voters_display(uids: list, max_chars: int = 380) -> str:
+    """Formatea una lista de IDs de Discord a menciones legibles respetando el límite de caracteres."""
+    if not uids:
+        return "*Ninguno*"
+    mentions = [f"<@{uid}>" for uid in uids]
+    items = []
+    cur = 0
+    for i, m in enumerate(mentions):
+        cost = len(m) + (2 if items else 0)
+        if cur + cost + 15 > max_chars:
+            items.append(f"*(+{len(mentions) - i} más)*")
+            break
+        items.append(m)
+        cur += cost
+    return ", ".join(items)
+
+
 class VoteView(discord.ui.View):
     """Botones interactivos de votación con conteo en tiempo real de votantes."""
     def __init__(self, vote_id: str = None, bot=None):
@@ -133,8 +150,8 @@ class VoteView(discord.ui.View):
             color=COLOR_INFO
         )
 
-        yes_mentions = self._format_voters_display(voters_info["yes_voters"])
-        no_mentions = self._format_voters_display(voters_info["no_voters"])
+        yes_mentions = _format_voters_display(voters_info["yes_voters"])
+        no_mentions = _format_voters_display(voters_info["no_voters"])
 
         embed.add_field(
             name=f"🟢 A favor ({voters_info['yes_count']})",
@@ -200,8 +217,8 @@ class VoteView(discord.ui.View):
         embed.add_field(name="📊 Total", value=f"**{results['total']}**", inline=True)
 
         if voters_info and voters_info["total"] > 0:
-            yes_mentions = self._format_voters_display(voters_info["yes_voters"], max_chars=260)
-            no_mentions = self._format_voters_display(voters_info["no_voters"], max_chars=260)
+            yes_mentions = _format_voters_display(voters_info["yes_voters"], max_chars=260)
+            no_mentions = _format_voters_display(voters_info["no_voters"], max_chars=260)
             embed.add_field(
                 name="👥 Votantes en tiempo real",
                 value=(
@@ -320,8 +337,8 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         embed.add_field(name="Total de votos", value=f"**{results['total']}**", inline=True)
 
         if voters_info and voters_info["total"] > 0:
-            yes_list = self._format_voters_display(voters_info["yes_voters"])
-            no_list = self._format_voters_display(voters_info["no_voters"])
+            yes_list = _format_voters_display(voters_info["yes_voters"])
+            no_list = _format_voters_display(voters_info["no_voters"])
             embed.add_field(
                 name="👥 Personas que Votaron",
                 value=f"🟢 **A favor ({voters_info['yes_count']}):**\n{yes_list}\n\n🔴 **En contra ({voters_info['no_count']}):**\n{no_list}",
@@ -360,25 +377,6 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
                 pass
         except Exception as e:
             logger.error(f"Error publicando resultado de votación {vote_id}: {e}")
-
-    # -------------------------------------------------------------------------
-    # Formato de listas de votantes (ya no se usan reacciones en las votaciones)
-    # -------------------------------------------------------------------------
-    def _format_voters_display(self, uids: list, max_chars: int = 380) -> str:
-        """Formatea una lista de IDs de Discord a menciones legibles respetando el límite de caracteres."""
-        if not uids:
-            return "*Ninguno*"
-        mentions = [f"<@{uid}>" for uid in uids]
-        items = []
-        cur = 0
-        for i, m in enumerate(mentions):
-            cost = len(m) + (2 if items else 0)
-            if cur + cost + 15 > max_chars:
-                items.append(f"*(+{len(mentions) - i} más)*")
-                break
-            items.append(m)
-            cur += cost
-        return ", ".join(items)
 
     # =========================================================================
     # COMANDO 1: /abrir-servidor y /abrir servidor
@@ -466,8 +464,8 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
 
         # Mostrar a las personas que votaron en el comando
         if voters_info and voters_info["total"] > 0:
-            yes_mentions = self._format_voters_display(voters_info["yes_voters"])
-            no_mentions = self._format_voters_display(voters_info["no_voters"])
+            yes_mentions = _format_voters_display(voters_info["yes_voters"])
+            no_mentions = _format_voters_display(voters_info["no_voters"])
 
             voters_value = (
                 f"🗳️ **Total de votantes registrados:** `{voters_info['total']}`\n\n"
