@@ -517,28 +517,93 @@ class Vehicles(commands.Cog):
     # ==========================================
     # COMANDO 4: /vehiculo buscar
     # ==========================================
-    @vehicle_group.command(name="buscar", description="Busca el registro de vehículos matriculados por ciudadano")
-    @app_commands.describe(usuario="Ciudadano a inspeccionar en el registro vehicular")
-    async def vehiculo_buscar(self, interaction: discord.Interaction, usuario: discord.Member):
+    @vehicle_group.command(name="buscar", description="Busca el registro de un vehículo matriculado por su placa")
+    @app_commands.describe(placa="Placa o matrícula del vehículo a consultar (ej: MIA-4829, ATV-1092, TRL-8402)")
+    async def vehiculo_buscar(self, interaction: discord.Interaction, placa: str):
         await interaction.response.defer()
         gid = str(interaction.guild_id)
-        uid = str(usuario.id)
+        search_term = placa.strip().upper()
 
-        rows = await aexecute(
-            "SELECT * FROM vehicle_registries WHERE guild_id=$1 AND discord_id=$2 ORDER BY registered_at DESC",
-            (gid, uid), fetch="all"
-        ) or []
-
-        if not rows:
-            await interaction.followup.send(embed=info_embed(
-                "Sin Registros Vehiculares",
-                f"El ciudadano {usuario.mention} no tiene ningún vehículo, remolque ni ATV registrado a su nombre."
+        if len(search_term) < 2:
+            await interaction.followup.send(embed=error_embed(
+                "Búsqueda Inválida",
+                "Introduce al menos 2 caracteres de la placa para realizar la búsqueda."
             ), ephemeral=True)
             return
 
+        rows = await aexecute(
+            """SELECT v.*, u.display_name, u.username, u.roblox_username, d.first_name, d.last_name, d.dni_number as citizen_dni
+               FROM vehicle_registries v
+               LEFT JOIN users u ON v.discord_id = u.discord_id AND v.guild_id = u.guild_id
+               LEFT JOIN dni_records d ON v.dni_id = d.id
+               WHERE v.guild_id=$1 AND UPPER(v.plate) LIKE $2 AND v.status != 'scrapped'
+               ORDER BY v.registered_at DESC
+               LIMIT 25""",
+            (gid, f"%{search_term}%"), fetch="all"
+        ) or []
+
+        if not rows:
+            await interaction.followup.send(embed=error_embed(
+                "Unidad No Encontrada",
+                f"No se encontró ningún vehículo, remolque ni ATV registrado con la placa `{search_term}`.\n"
+                f"Verifica que la placa esté bien escrita o usa `/vehiculo ver` para una consulta exacta."
+            ), ephemeral=True)
+            return
+
+        if len(rows) == 1:
+            row = rows[0]
+            v_type = row.get("vehicle_type", "auto")
+            t_meta = VEHICLE_TYPE_META.get(v_type, VEHICLE_TYPE_META["auto"])
+            plate = row.get("plate")
+            model = row.get("brand_model")
+            color = row.get("color")
+            status = row.get("status", "active")
+
+            status_text = {
+                "active": "🟢 Activo / Habilitado para Circular",
+                "impounded": "🔴 Incautado en Depósito Municipal",
+                "stolen": "🚨 REPORTADO COMO ROBADO",
+                "sold": "⚪ Transferido / Cambio de Titular",
+                "scrapped": "⚫ Dado de Baja / Fuera de Servicio"
+            }.get(status, "🟢 Activo")
+
+            embed = discord.Embed(
+                title=f"{t_meta['emoji']} Registro Vehicular Oficial de Miami",
+                description=f"Resultado de la búsqueda por placa **{plate}**.",
+                color=COLOR_PRIMARY
+            )
+            embed.add_field(name="🏷️ Placa de Circulación", value=f"```fix\n{plate}\n```", inline=True)
+            embed.add_field(name="🔢 Número de Chasis (VIN)", value=f"`{row.get('vin_number', 'N/A')}`", inline=True)
+            embed.add_field(name="🚦 Tipo de Unidad", value=f"{t_meta['emoji']} {t_meta['label']}", inline=True)
+            embed.add_field(name="🚘 Marca y Modelo", value=f"**{model}**", inline=True)
+            embed.add_field(name="🎨 Color Registrado", value=f"{color}", inline=True)
+            embed.add_field(name="📋 Estado Legal", value=f"**{status_text}**", inline=True)
+
+            owner_id = row.get("discord_id")
+            owner_name = f"{row.get('first_name', '')} {row.get('last_name', '')}".strip() or row.get("display_name") or "Ciudadano"
+            dni_num = row.get("dni_number") or row.get("citizen_dni") or "N/A"
+            owner_str = f"<@{owner_id}>\n👤 **Nombre IC:** {owner_name}\n🪪 **DNI:** `{dni_num}`"
+            if row.get("roblox_username"):
+                owner_str += f"\n🎮 **Roblox:** `{row.get('roblox_username')}`"
+            embed.add_field(name="👤 Titular Registrado", value=owner_str, inline=False)
+
+            if status == "impounded":
+                imp_reason = row.get("impound_reason", "Infracción de tránsito / delito")
+                imp_fine = float(row.get("impound_fine", 0))
+                embed.add_field(
+                    name="⚠️ Datos de Incautación",
+                    value=f"**Motivo:** {imp_reason}\n**Multa de liberación:** `${imp_fine:,.2f}`\n*Usa `/vehiculo liberar placa:{plate}` para pagar y retirar del corralón.*",
+                    inline=False
+                )
+
+            embed.set_footer(text="Miami Vice DMV • Consulta por Placa")
+            embed.timestamp = discord.utils.utcnow()
+            await interaction.followup.send(embed=embed)
+            return
+
         embed = info_embed(
-            f"Parque Automotor Registrado de {usuario.display_name}",
-            f"Expediente del DMV con **{len(rows)}** unidades a nombre del titular:"
+            f"Resultados de Búsqueda por Placa — `{search_term}`",
+            f"Se encontraron **{len(rows)}** unidades con una placa similar:"
         )
 
         for row in rows:
@@ -549,14 +614,15 @@ class Vehicles(commands.Cog):
             color = row.get("color")
             status = row.get("status", "active")
             status_tag = "🟢 Activo" if status == "active" else f"🔴 {status.upper()}"
+            owner_uid = row.get("discord_id")
 
             embed.add_field(
                 name=f"{t_meta['emoji']} Placa: `{plate}` — {model}",
-                value=f"**Color:** {color} | **Estado:** {status_tag} | **VIN:** `{row.get('vin_number')}`",
+                value=f"**Color:** {color} | **Estado:** {status_tag} | **VIN:** `{row.get('vin_number')}`\n👤 **Titular:** <@{owner_uid}>",
                 inline=False
             )
 
-        embed.set_footer(text="Miami Vice DMV • Consulta Oficial")
+        embed.set_footer(text="Miami Vice DMV • Consulta Oficial por Placa")
         await interaction.followup.send(embed=embed)
 
     # ==========================================

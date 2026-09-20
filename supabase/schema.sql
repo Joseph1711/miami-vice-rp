@@ -509,6 +509,13 @@ CREATE TABLE IF NOT EXISTS server_vote_entries (
     PRIMARY KEY (vote_id, discord_id)
 );
 
+CREATE TABLE IF NOT EXISTS server_vote_removals (
+    id TEXT PRIMARY KEY,
+    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+    discord_id TEXT NOT NULL,
+    removed_at TIMESTAMP DEFAULT NOW()
+);
+
 -- =====================
 -- POLICE & CRIMINAL RECORDS
 -- =====================

@@ -142,6 +142,25 @@ async def remove_user_vote(vote_id: str, discord_id: str):
     )
 
 
+async def record_vote_removal(vote_id: str, discord_id: str):
+    """Registra que un usuario retiró su voto (para auditoría en tiempo real)."""
+    await aexecute(
+        """INSERT INTO server_vote_removals (id, vote_id, discord_id, removed_at)
+           VALUES ($1, $2, $3, NOW())""",
+        (generate_id(), str(vote_id), str(discord_id))
+    )
+
+
+async def get_vote_removals(vote_id: str) -> list:
+    """Obtiene la lista de usuarios que retiraron su voto (más recientes primero)."""
+    rows = await aexecute(
+        "SELECT discord_id, removed_at FROM server_vote_removals WHERE vote_id = $1 ORDER BY removed_at DESC",
+        (str(vote_id),),
+        fetch="all"
+    ) or []
+    return [{"discord_id": str(r["discord_id"]), "removed_at": r.get("removed_at")} for r in rows]
+
+
 async def get_vote_results(vote_id: str) -> dict:
     """Calcula el conteo de votos a favor, en contra y el total."""
     rows = await aexecute(

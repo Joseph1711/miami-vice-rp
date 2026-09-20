@@ -263,6 +263,14 @@ def _ensure_schema_migrations(conn):
                     PRIMARY KEY (vote_id, discord_id)
                 )
                 """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS server_vote_removals (
+                    id TEXT PRIMARY KEY,
+                    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+                    discord_id TEXT NOT NULL,
+                    removed_at TIMESTAMP DEFAULT NOW()
+                )
+                """)
             conn.commit()
         else:
             cursor = conn.execute("PRAGMA table_info(users)")
@@ -430,6 +438,14 @@ def _ensure_schema_migrations(conn):
                 choice TEXT NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 PRIMARY KEY (vote_id, discord_id)
+            )
+            """)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS server_vote_removals (
+                id TEXT PRIMARY KEY,
+                vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+                discord_id TEXT NOT NULL,
+                removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """)
             conn.commit()

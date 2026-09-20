@@ -65,7 +65,7 @@ HELP_CATEGORIES = {
             ("/vehiculo registrar tipo [placa] [marca_modelo] [color]", "Matricular vehículo, trailer o cuatrimoto con tu placa personalizada"),
             ("/vehiculo mis_vehiculos [filtro_tipo]", "Consultar tu garage de vehículos, remolques y ATVs registrados"),
             ("/vehiculo ver placa_o_vin", "Ver tarjeta de circulación, titular y estado legal de una unidad"),
-            ("/vehiculo buscar @usuario", "Consultar el parque automotor registrado de un ciudadano"),
+            ("/vehiculo buscar placa", "Buscar el registro de un vehículo por su placa o matrícula"),
             ("/vehiculo transferir placa @usuario [precio]", "Transferir legalmente la titularidad de un vehículo a otro ciudadano"),
             ("/vehiculo reportar placa estado", "Reportar vehículo como robado o recuperado ante la policía"),
             ("/vehiculo incautar placa motivo [multa]", "Incautar vehículo al corralón municipal (Admin/Policía)"),
@@ -93,6 +93,7 @@ HELP_CATEGORIES = {
             ("/departamento contratar @usuario acronimo", "Contratar o ascender a un miembro (Admin/Mandos)"),
             ("/departamento despedir @usuario acronimo", "Dar de baja a un miembro (Admin/Mandos)"),
             ("/flota ver acronimo", "Ver vehículos del departamento"),
+            ("/flota catalogo [acronimo]", "Ver los vehículos disponibles para comprar en los departamentos"),
             ("/flota solicitar acronimo placa", "Solicitar un vehículo para patrullaje"),
             ("/flota devolver placa", "Devolver vehículo a la base"),
         ]

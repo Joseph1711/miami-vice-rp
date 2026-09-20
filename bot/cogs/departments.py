@@ -35,6 +35,121 @@ DEPT_EMOJI = {
     "CFD": "🚒"
 }
 
+# Catálogo oficial de vehículos disponibles para comprar en cada departamento.
+FLEET_CATALOG = {
+    "MPD": {
+        "name": "Police Department (Policía / Alguacil)",
+        "emoji": "👮",
+        "vehicles": [
+            "4-Wheeler",
+            "Averon Q8 2022",
+            "BKM Munich 2020",
+            "Bullhorn BH15 SSV 2009",
+            "Bullhorn Determinator C/T 2022",
+            "Bullhorn Determinator SFP Fury 2022",
+            "Bullhorn Determinator SFP Fury Blackjack Widebody 2022",
+            "Bullhorn Foreman 1988",
+            "Bullhorn Prancer Fury Widebody Pursuit 2020",
+            "Bullhorn Prancer Pursuit 2011",
+            "Bullhorn Prancer Pursuit 2015",
+            "Bullhorn Pueblo Pursuit 2022",
+            "Canyon Descender",
+            "Celestial Truckatron 2024",
+            "Chevlon Amigo LZR 2011",
+            "Chevlon Antelope SS 1994",
+            "Chevlon Camion PPV 2000",
+            "Chevlon Camion PPV 2008",
+            "Chevlon Camion PPV 2018",
+            "Chevlon Camion PPV 2021",
+            "Chevlon Captain PPV 2009",
+            "Chevlon Commuter Van 2006",
+            "Chevlon Corbeta RZR 2014",
+            "Chevlon Inferno 1981",
+            "Chevlon Platoro PPV 2019",
+            "Emergency Services Falcon Advance+ 2020",
+            "Equipment Trailer",
+            "Falcon Advance 350 2020",
+            "Falcon Advance XET 2022",
+            "Falcon eStallion 2024",
+            "Falcon Global 350 2013",
+            "Falcon Interceptor Sedan 2017",
+            "Falcon Interceptor Utility 2013",
+            "Falcon Interceptor Utility 2019",
+            "Falcon Interceptor Utility 2024",
+            "Falcon Prime Eques Interceptor 2003",
+            "Falcon Rampage Interceptor 2021",
+            "Falcon Stallion 350 2015",
+            "Falcon Traveller 2002",
+            "Falcon Traveller PPV 2022",
+            "Ferdinand Rapido GTR3 2023",
+            "Mobile Command 2005",
+            "Mobile Surveillance Trailer",
+            "Prisoner Transport Bus",
+            "Silhouette Discorso 2024",
+            "Stuttgart Runner Prisoner Transport 2020",
+            "SWAT Armored Truck 2011",
+        ],
+    },
+    "MDFR": {
+        "name": "Fire Department (Bomberos)",
+        "emoji": "🚒",
+        "vehicles": [
+            "4-Wheeler",
+            "Brush Falcon Advance+ 2020",
+            "Bullhorn Pueblo Pursuit 2022",
+            "Canyon Descender",
+            "Chevlon Camion 2018",
+            "Chevlon L/15 Brush Truck 1981",
+            "Falcon Advance 350 2020",
+            "Falcon Advance 450 Ambulance 2020",
+            "Falcon Advance 600 Pumper 1956",
+            "Falcon Global 450 Ambulance 2018",
+            "Falcon Interceptor Utility 2019",
+            "Heavy Rescue",
+            "Medical Bus",
+            "Mobile Command Center",
+            "Redline Fire Engine",
+            "Redline Heavy Tanker 2014",
+            "Redline Midmount Ladder",
+            "Redline Rearmount Ladder",
+            "Redline Tanker 2014",
+            "Redline Type 3 Brush Truck 2014",
+            "Special Operations Unit",
+            "Squad Falcon Advance+ 2020",
+        ],
+    },
+    "FDOT": {
+        "name": "Department of Transportation (Departamento de Transporte)",
+        "emoji": "🚧",
+        "vehicles": [
+            "Aikawa Street Sweeper 2010",
+            "Chevlon L/35 Flatbed Tow Truck 1981",
+            "Explorer Dump Truck 2015",
+            "Explorer Flatbed Tow Truck 2015",
+            "Explorer Salt Truck 2015",
+            "Explorer Transport Truck 2015",
+            "Falcon Advance 350 2020",
+            "Falcon Advance 450 2020",
+            "Falcon Advance 450 Bucket Truck 2020",
+            "Falcon Advance 450 Roadside Assist 2020",
+            "Falcon Advance 450 Tow Truck 2020",
+            "Falcon Global 450 Utility 2018",
+            "Forklift",
+            "Front Loader Tractor",
+            "Vellfire Evertt Crew Cab 1995",
+            "Vinnimade Heavy Rotator 2013",
+            "Vinnimade Heavy Wrecker 2013",
+        ],
+    },
+}
+
+# Acrónimos/alias alternativos reconocidos para cada catálogo departamental.
+FLEET_CATALOG_ALIASES = {
+    "MPD": ["MPD", "MDC", "MDPD", "POLICE", "POLICIA", "ALGUACIL", "SHERIFF", "CPD", "FHP", "MBPD"],
+    "MDFR": ["MDFR", "FIRE", "BOMBEROS", "CFD", "FRS", "EMS"],
+    "FDOT": ["FDOT", "DOT", "TRANSPORTE", "TRANSPORTATION", "DOTD"],
+}
+
 
 class ApproveDepartmentAppModal(discord.ui.Modal):
     def __init__(self, app_id: str, dept_id: str, applicant_id: str):
@@ -608,6 +723,81 @@ class Departments(commands.Cog):
             lines = [f"🚗 **{v['type_name']}** `{v.get('plate','N/A')}` — {status_emoji.get(v.get('status','active'),'❓')} {v.get('status','active').title()}" for v in vehicles]
             e.description = "\n".join(lines)
         await interaction.followup.send(embed=e)
+
+    @flota.command(name="catalogo", description="Ver los vehículos disponibles para comprar en los departamentos")
+    @app_commands.describe(categoria="Categoría o acrónimo (MPD/Policía, MDFR/Bomberos, FDOT/Transporte). Omite para ver todo el catálogo")
+    async def flota_catalogo(self, interaction: discord.Interaction, categoria: str = None):
+        await interaction.response.defer()
+
+        raw = categoria.strip().upper() if categoria else ""
+        if raw == "TODOS":
+            key = "__all__"
+        else:
+            key = self._resolve_catalog_category(categoria) if categoria else "__all__"
+
+        if not key:
+            await interaction.followup.send(embed=error_embed(
+                "Categoría Inválida",
+                f"No se reconoció **{categoria}** como un catálogo departamental.\n\n"
+                f"Usa: `MPD` / `POLICIA` / `ALGUACIL` / `SHERIFF` (Policía), `MDFR` / `BOMBEROS` (Bomberos), "
+                f"`FDOT` / `TRANSPORTE` (Departamento de Transporte).\n"
+                f"También puedes omitir el parámetro para ver todo el catálogo."
+            ), ephemeral=True)
+            return
+
+        if key != "__all__":
+            target = FLEET_CATALOG[key]
+            e = department_embed(
+                f"{target['emoji']} Catálogo — {target['name']}",
+                "Modelos disponibles para adquirir con el presupuesto del departamento.\n"
+                "Usa `/flota comprar` con uno de los modelos listados."
+            )
+            self._add_catalog_fields(e, target["emoji"], target["name"], target["vehicles"])
+            total_models = len(target["vehicles"])
+        else:
+            e = department_embed(
+                "🚗 Catálogo de Vehículos Departamentales",
+                "Modelos disponibles para adquirir con el presupuesto de cada departamento.\n"
+                "Usa `/flota catalogo [categoria]` para filtrar por institución o `/flota comprar` para adquirir un modelo."
+            )
+            for key in FLEET_CATALOG:
+                cat = FLEET_CATALOG[key]
+                self._add_catalog_fields(e, cat["emoji"], cat["name"], cat["vehicles"])
+            total_models = sum(len(FLEET_CATALOG[k]["vehicles"]) for k in FLEET_CATALOG)
+
+        e.set_footer(text=f"Miami Vice RP • Concesionario Departamental • {total_models} modelos disponibles")
+        await interaction.followup.send(embed=e)
+
+    def _resolve_catalog_category(self, categoria: str) -> str:
+        """Resuelve un texto/acrónimo del usuario hacia la clave del catálogo correspondiente."""
+        if not categoria:
+            return None
+        raw = str(categoria).strip().upper()
+        # Compara con el nombre oficial de cada catálogo
+        for key, cat in FLEET_CATALOG.items():
+            if raw in cat["name"].upper():
+                return key
+        # Compara con los alias/acrónimos conocidos
+        for key, aliases in FLEET_CATALOG_ALIASES.items():
+            if raw in aliases:
+                return key
+        # Coincidencia parcial de alias
+        for key, aliases in FLEET_CATALOG_ALIASES.items():
+            for alias in aliases:
+                if alias in raw or (len(raw) >= 3 and raw in alias):
+                    return key
+        return None
+
+    def _add_catalog_fields(self, embed, emoji: str, dept_name: str, vehicles: list, chunk_size: int = 15):
+        """Agrega los modelos del catálogo en campos del embed, dividiéndolos para respetar el límite de 1024 caracteres."""
+        for i in range(0, len(vehicles), chunk_size):
+            chunk = vehicles[i:i + chunk_size]
+            lines = [f"• {v}" for v in chunk]
+            if i == 0:
+                title = f"{emoji} {dept_name} ({len(vehicles)} modelos)"
+            else:
+                title = f"{emoji} {dept_name} (Continuación {i // chunk_size + 1})"
+            embed.add_field(name=title, value="\n".join(lines), inline=False)
 
     @flota.command(name="comprar", description="Comprar vehículos para la flota del departamento (Admin/Mandos)")
     @app_commands.describe(

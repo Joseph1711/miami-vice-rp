@@ -5,7 +5,7 @@ import datetime
 import logging
 import asyncio
 
-from bot.helpers import check_admin_permission
+from bot.helpers import check_admin_permission, parse_db_datetime
 from bot.embeds import COLOR_SUCCESS, COLOR_ERROR, COLOR_INFO, COLOR_WARNING
 from bot.services.server_status import (
     SERVER_CODE,
@@ -16,8 +16,10 @@ from bot.services.server_status import (
     get_active_vote_by_guild,
     get_latest_vote_for_guild,
     get_vote_voters,
+    get_vote_removals,
     record_user_vote,
     remove_user_vote,
+    record_vote_removal,
     get_vote_results,
     close_server_vote
 )
@@ -26,8 +28,8 @@ logger = logging.getLogger("bot.cogs.server_control")
 
 
 class VoteView(discord.ui.View):
-    """Botones interactivos de votación para complementar las reacciones."""
-    def __init__(self, vote_id: str, bot=None):
+    """Botones interactivos de votación con conteo en tiempo real de votantes."""
+    def __init__(self, vote_id: str = None, bot=None):
         super().__init__(timeout=None)
         self.vote_id = vote_id
         self.bot = bot
@@ -40,17 +42,194 @@ class VoteView(discord.ui.View):
     async def vote_no(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_vote(interaction, "no")
 
+    @discord.ui.button(label="Ver votantes", style=discord.ButtonStyle.secondary, emoji="👥", custom_id="btn_vote_viewers")
+    async def vote_viewers(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._show_voters(interaction)
+
+    @discord.ui.button(label="Quitar mi voto", style=discord.ButtonStyle.danger, emoji="🗑️", custom_id="btn_vote_remove")
+    async def vote_remove(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self._handle_remove_vote(interaction)
+
+    def _current_vote_id(self) -> str:
+        """Devuelve el ID real de la votación incluso si la vista fue reconstruida tras un reinicio."""
+        return self.vote_id
+
     async def _handle_vote(self, interaction: discord.Interaction, choice: str):
         uid = str(interaction.user.id)
+        await interaction.response.defer(ephemeral=True)
+
+        vote_id = self._current_vote_id()
+        if vote_id in (None, "pending"):
+            await interaction.followup.send("⏳ La votación aún se está registrando, intenta de nuevo en un momento.", ephemeral=True)
+            return
+
         # Registrar o actualizar voto (1 voto por usuario)
-        await record_user_vote(self.vote_id, uid, choice)
-        res = await get_vote_results(self.vote_id)
-        
+        await record_user_vote(vote_id, uid, choice)
+        # Si el usuario había retirado su voto antes, ya cuenta como votante activo nuevamente
+        res = await get_vote_results(vote_id)
+
+        await self._refresh_live_embed(interaction, res)
+
         choice_text = "🟢 **Sí — Abrir servidor**" if choice == "yes" else "🔴 **No — Mantener cerrado**"
-        await interaction.response.send_message(
-            f"✅ Tu voto por {choice_text} ha sido registrado exitosamente.\n*Conteo actual:* 🟢 {res['yes']} | 🔴 {res['no']} (Total: {res['total']})",
+        await interaction.followup.send(
+            f"✅ Tu voto por {choice_text} ha sido registrado exitosamente.\n"
+            f"*Conteo actual:* 🟢 {res['yes']} | 🔴 {res['no']} (Total: {res['total']})",
             ephemeral=True
         )
+
+    async def _handle_remove_vote(self, interaction: discord.Interaction):
+        uid = str(interaction.user.id)
+        await interaction.response.defer(ephemeral=True)
+
+        vote_id = self._current_vote_id()
+        if vote_id in (None, "pending"):
+            await interaction.followup.send("⏳ La votación aún se está registrando, intenta de nuevo en un momento.", ephemeral=True)
+            return
+
+        res = await get_vote_results(vote_id)
+        existing = await get_vote_voters(vote_id)
+        had_vote = uid in existing["total_voters"]
+
+        if not had_vote:
+            await interaction.followup.send(
+                "ℹ️ No tienes un voto registrado que retirar.",
+                ephemeral=True
+            )
+            return
+
+        await remove_user_vote(vote_id, uid)
+        await record_vote_removal(vote_id, uid)
+
+        new_res = await get_vote_results(vote_id)
+        await self._refresh_live_embed(interaction, new_res)
+
+        await interaction.followup.send(
+            f"🗑️ Tu voto ha sido **retirado** correctamente.\n"
+            f"*Conteo actualizada:* 🟢 {new_res['yes']} | 🔴 {new_res['no']} (Total: {new_res['total']})",
+            ephemeral=True
+        )
+
+    async def _show_voters(self, interaction: discord.Interaction):
+        """Muestra en tiempo real quiénes han votado y quiénes retiraron su voto."""
+        vote_id = self._current_vote_id()
+        await interaction.response.defer(ephemeral=True)
+
+        if vote_id in (None, "pending"):
+            await interaction.followup.send("⏳ Aún no hay una votación activa registrada.", ephemeral=True)
+            return
+
+        voters_info = await get_vote_voters(vote_id)
+        removals = await get_vote_removals(vote_id)
+        res = await get_vote_results(vote_id)
+
+        embed = discord.Embed(
+            title="👥 Votantes en Tiempo Real",
+            description=(
+                f"Conteo actual de la votación oficial de apertura:\n\n"
+                f"🟢 **A favor:** {res['yes']}\n"
+                f"🔴 **En contra:** {res['no']}\n"
+                f"📊 **Total de votantes activos:** {res['total']}"
+            ),
+            color=COLOR_INFO
+        )
+
+        yes_mentions = self._format_voters_display(voters_info["yes_voters"])
+        no_mentions = self._format_voters_display(voters_info["no_voters"])
+
+        embed.add_field(
+            name=f"🟢 A favor ({voters_info['yes_count']})",
+            value=yes_mentions or "*Ninguno*",
+            inline=False
+        )
+        embed.add_field(
+            name=f"🔴 En contra ({voters_info['no_count']})",
+            value=no_mentions or "*Ninguno*",
+            inline=False
+        )
+
+        if removals:
+            removal_lines = []
+            for r in removals[:25]:
+                when = ""
+                removed_at = parse_db_datetime(r.get("removed_at"))
+                if removed_at:
+                    when = f" — <t:{int(removed_at.timestamp())}:R>"
+                removal_lines.append(f"• <@{r['discord_id']}>{when}")
+            embed.add_field(
+                name=f"🗑️ Retiraron / quitaron su voto ({len(removals)})",
+                value="\n".join(removal_lines) + (f"\n*... +{len(removals) - 25} más*" if len(removals) > 25 else ""),
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="🗑️ Retiraron su voto",
+                value="*Nadie ha retirado su voto hasta ahora.*",
+                inline=False
+            )
+
+        embed.set_footer(text="Miami Vice RP • Votación Oficial de Apertura")
+        embed.timestamp = discord.utils.utcnow()
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    async def _build_vote_embed(self, vote: dict, results: dict, guild: discord.Guild) -> discord.Embed:
+        """Construye el embed de votación mostrando los conteos y votantes en tiempo real."""
+        ends_at = parse_db_datetime(vote.get("ends_at")) if vote else None
+        ends_display = f"<t:{int(ends_at.timestamp())}:R> (<t:{int(ends_at.timestamp())}:T>)" if ends_at else "En breve"
+
+        voters_info = None
+        if vote:
+            try:
+                voters_info = await get_vote_voters(vote["id"])
+            except Exception:
+                voters_info = None
+
+        embed = discord.Embed(
+            title="🗳️ Votación de Apertura",
+            description=(
+                "> ¿Deseas que **Miami Vice Roleplay** abra sus operaciones?\n\n"
+                "🟢 **Sí — Abrir servidor**\n"
+                "🔴 **No — Mantener cerrado**\n\n"
+                "> ✅ **Usa los botones de abajo para votar.**\n\n"
+                f"⏱️ **Tiempo restante:** Termina {ends_display}"
+            ),
+            color=0x00E5FF
+        )
+
+        embed.add_field(name="🟢 A favor", value=f"**{results['yes']}**", inline=True)
+        embed.add_field(name="🔴 En contra", value=f"**{results['no']}**", inline=True)
+        embed.add_field(name="📊 Total", value=f"**{results['total']}**", inline=True)
+
+        if voters_info and voters_info["total"] > 0:
+            yes_mentions = self._format_voters_display(voters_info["yes_voters"], max_chars=260)
+            no_mentions = self._format_voters_display(voters_info["no_voters"], max_chars=260)
+            embed.add_field(
+                name="👥 Votantes en tiempo real",
+                value=(
+                    f"🟢 **A favor ({voters_info['yes_count']}):**\n{yes_mentions}\n\n"
+                    f"🔴 **En contra ({voters_info['no_count']}):**\n{no_mentions}\n\n"
+                    f"*Pulsa el botón « 👥 Ver votantes » para ver el detalle completo.*"
+                ),
+                inline=False
+            )
+
+        embed.set_footer(
+            text="Miami Vice RP • Votación Oficial de Apertura",
+            icon_url=guild.icon.url if guild and guild.icon else None
+        )
+        embed.timestamp = discord.utils.utcnow()
+        return embed
+
+    async def _refresh_live_embed(self, interaction: discord.Interaction, results: dict):
+        """Actualiza el embed del mensaje de votación con los conteos y votantes en vivo."""
+        try:
+            vote = await get_active_vote_by_message(str(interaction.message.id))
+            if not vote:
+                return
+            embed = await self._build_vote_embed(vote, results, getattr(interaction, "guild", None))
+            fresh_view = VoteView(vote_id=self._current_vote_id(), bot=self.bot)
+            await interaction.message.edit(embed=embed, view=fresh_view)
+        except Exception as e:
+            logger.error(f"Error actualizando embed en vivo de la votación: {e}", exc_info=True)
 
 
 class ServerControl(commands.Cog, name="Control de Servidor"):
@@ -58,10 +237,35 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._registered_view_messages = set()
         self.check_expired_votes.start()
 
     def cog_unload(self):
         self.check_expired_votes.cancel()
+
+    # -------------------------------------------------------------------------
+    # Registro de vistas persistentes de votación (sobreviven a reinicios)
+    # -------------------------------------------------------------------------
+    @commands.Cog.listener()
+    async def on_ready(self):
+        try:
+            from bot.db import aexecute
+            active_votes = await aexecute(
+                "SELECT id, message_id FROM server_votes WHERE status = 'active'",
+                (),
+                fetch="all"
+            ) or []
+            for vote in active_votes:
+                msg_id = int(vote["message_id"])
+                if msg_id in self._registered_view_messages:
+                    continue
+                view = VoteView(vote_id=vote["id"], bot=self.bot)
+                self.bot.add_view(view, message_id=msg_id)
+                self._registered_view_messages.add(msg_id)
+            if active_votes:
+                logger.info(f"Registradas {len(active_votes)} vistas de votación persistentes")
+        except Exception as e:
+            logger.error(f"Error registrando vistas de votación persistentes: {e}", exc_info=True)
 
     # -------------------------------------------------------------------------
     # Tarea periódica para finalizar votaciones automáticamente
@@ -158,75 +362,8 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
             logger.error(f"Error publicando resultado de votación {vote_id}: {e}")
 
     # -------------------------------------------------------------------------
-    # Manejo de Reacciones 🟢 y 🔴 para Votaciones
+    # Formato de listas de votantes (ya no se usan reacciones en las votaciones)
     # -------------------------------------------------------------------------
-    @commands.Cog.listener()
-    async def on_raw_reaction_add(self, payload: discord.RawReactionActionEvent):
-        # Ignorar reacciones del bot
-        if payload.user_id == self.bot.user.id:
-            return
-
-        emoji_name = str(payload.emoji.name)
-        if emoji_name not in ("🟢", "🔴"):
-            return
-
-        vote = await get_active_vote_by_message(str(payload.message_id))
-        if not vote:
-            return
-
-        choice = "yes" if emoji_name == "🟢" else "no"
-        await record_user_vote(vote["id"], str(payload.user_id), choice)
-
-        # Si el usuario tenía la otra reacción en el mensaje, removerla para que coincida con su voto único
-        try:
-            guild = self.bot.get_guild(payload.guild_id)
-            if guild:
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    msg = await channel.fetch_message(payload.message_id)
-                    other_emoji = "🔴" if emoji_name == "🟢" else "🟢"
-                    for r in msg.reactions:
-                        if str(r.emoji) == other_emoji:
-                            user = guild.get_member(payload.user_id)
-                            if user:
-                                await r.remove(user)
-        except Exception:
-            pass
-
-    @commands.Cog.listener()
-    async def on_raw_reaction_remove(self, payload: discord.RawReactionActionEvent):
-        # Ignorar reacciones del bot
-        if payload.user_id == self.bot.user.id:
-            return
-
-        emoji_name = str(payload.emoji.name)
-        if emoji_name not in ("🟢", "🔴"):
-            return
-
-        vote = await get_active_vote_by_message(str(payload.message_id))
-        if not vote:
-            return
-
-        # Si el usuario removió una reacción y no tiene la otra, remover su voto
-        try:
-            guild = self.bot.get_guild(payload.guild_id)
-            if guild:
-                channel = guild.get_channel(payload.channel_id)
-                if channel:
-                    msg = await channel.fetch_message(payload.message_id)
-                    other_emoji = "🔴" if emoji_name == "🟢" else "🟢"
-                    has_other = False
-                    for r in msg.reactions:
-                        if str(r.emoji) == other_emoji:
-                            users = [u.id async for u in r.users()]
-                            if payload.user_id in users:
-                                has_other = True
-                                break
-                    if not has_other:
-                        await remove_user_vote(vote["id"], str(payload.user_id))
-        except Exception:
-            pass
-
     def _format_voters_display(self, uids: list, max_chars: int = 380) -> str:
         """Formatea una lista de IDs de Discord a menciones legibles respetando el límite de caracteres."""
         if not uids:
@@ -462,30 +599,17 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         target_channel = canal or interaction.channel
         dur = max(1, min(1440, duracion_minutos))
 
-        ends_timestamp = int((datetime.datetime.utcnow() + datetime.timedelta(minutes=dur)).timestamp())
+        ends_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=dur)
+        empty_results = {"yes": 0, "no": 0, "total": 0, "winner": "tie"}
+        placeholder_vote = {"ends_at": ends_at}
 
-        # Crear Embed con el diseño y formato requerido
-        embed = discord.Embed(
-            title="🗳️ Votación de Apertura",
-            description=(
-                "> ¿Deseas que **Miami Vice Roleplay** abra sus operaciones?\n\n"
-                "🟢 **Sí — Abrir servidor**\n"
-                "🔴 **No — Mantener cerrado**\n\n"
-                "> ⚠️ **La reacción del bot no cuenta como voto.**\n\n"
-                f"⏱️ **Tiempo restante:** Termina <t:{ends_timestamp}:R> (<t:{ends_timestamp}:T>)"
-            ),
-            color=0x00E5FF
-        )
-        embed.set_footer(
-            text="Miami Vice RP • Votación Oficial de Apertura",
-            icon_url=interaction.guild.icon.url if interaction.guild.icon else None
-        )
-        embed.timestamp = discord.utils.utcnow()
-
-        # Enviar mensaje con botones interactivos y agregar reacciones 🟢 y 🔴
+        # Enviar mensaje con botones interactivos (sin reacciones)
         dummy_vote_id = "pending"
         vote_view = VoteView(vote_id=dummy_vote_id, bot=self.bot)
-        
+
+        # Crear Embed con el formato oficial (conteos en tiempo real y botones)
+        embed = await vote_view._build_vote_embed(placeholder_vote, empty_results, interaction.guild)
+
         msg = await target_channel.send(
             content="@everyone" if interaction.guild else None,
             embed=embed,
@@ -504,15 +628,16 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         # Vincular el ID real de la votación con la vista de botones
         vote_view.vote_id = vote_data["id"]
 
-        # Agregar reacciones oficiales iniciales del bot
+        # Registrar la vista como persistente para que sobreviva a reinicios del bot
         try:
-            await msg.add_reaction("🟢")
-            await msg.add_reaction("🔴")
+            self.bot.add_view(vote_view, message_id=msg.id)
+            self._registered_view_messages.add(msg.id)
         except Exception as e:
-            logger.warning(f"No se pudieron agregar reacciones automáticamente al mensaje: {e}")
+            logger.warning(f"No se pudo registrar la vista persistente de la votación: {e}")
 
         await interaction.followup.send(
-            f"✅ Votación de apertura iniciada en {target_channel.mention} con una duración de **{dur} minutos**.",
+            f"✅ Votación de apertura iniciada en {target_channel.mention} con una duración de **{dur} minutos**.\n"
+            f"Los votos se registran mediante los **botones** y puedes consultar a los votantes en tiempo real.",
             ephemeral=True
         )
 
