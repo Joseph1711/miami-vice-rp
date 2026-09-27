@@ -130,6 +130,8 @@ async def main():
     try:
         from scripts.init_db import init_db
         init_db()
+        from bot.db import run_migrations
+        run_migrations(force=True)
     except Exception as e:
         logger.error(f"[DB] Error inicializando tablas: {e}")
         logger.warning("El panel seguirá disponible; no se pudo inicializar la base de datos.")

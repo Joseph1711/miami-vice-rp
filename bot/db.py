@@ -8,7 +8,10 @@ import logging
 import os
 import re
 import sqlite3
+import threading
 import time
+from collections import deque
+from contextlib import contextmanager
 from pathlib import Path
 
 logger = logging.getLogger("bot.db")
@@ -77,11 +80,44 @@ else:
 USE_POSTGRES = DB_BACKEND in {"supabase", "postgres", "postgresql"}
 SLOW_QUERY_MS = 500
 
-try:
-    DB_OPERATION_TIMEOUT_SECONDS = max(1.0, float(os.environ.get("DB_OPERATION_TIMEOUT_SECONDS", "8")))
-except ValueError:
-    DB_OPERATION_TIMEOUT_SECONDS = 8.0
+
+def _env_float(name: str, default: float, minimum: float) -> float:
+    try:
+        return max(minimum, float(os.environ.get(name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_int(name: str, default: int, minimum: int) -> int:
+    return int(_env_float(name, default, minimum))
+
+
+# Presupuesto total de una operacion (conexion + query). Antes 8s: en un host
+# remoto eso se agotaba solo con el handshake TLS y las migraciones por query.
+DB_OPERATION_TIMEOUT_SECONDS = _env_float("DB_OPERATION_TIMEOUT_SECONDS", 15.0, 2.0)
 DB_STATEMENT_TIMEOUT_MS = int(DB_OPERATION_TIMEOUT_SECONDS * 1000)
+# Un lock que no se libera falla rapido y se reintenta, en vez de quemarse el
+# presupuesto completo esperando.
+DB_LOCK_TIMEOUT_MS = _env_int("DB_LOCK_TIMEOUT_MS", 4000, 500)
+DB_CONNECT_TIMEOUT_SECONDS = _env_int("DB_CONNECT_TIMEOUT_SECONDS", 10, 1)
+DB_MIGRATION_TIMEOUT_MS = _env_int("DB_MIGRATION_TIMEOUT_MS", 60000, 5000)
+DB_POOL_MAX_SIZE = _env_int("DB_POOL_MAX_SIZE", 8, 1)
+DB_POOL_WAIT_SECONDS = _env_float("DB_POOL_WAIT_SECONDS", 10.0, 1.0)
+DB_RETRY_ATTEMPTS = _env_int("DB_RETRY_ATTEMPTS", 3, 1)
+DB_RETRY_BACKOFF_SECONDS = _env_float("DB_RETRY_BACKOFF_SECONDS", 0.4, 0.0)
+DB_RETRY_BUDGET_RATIO = _env_float("DB_RETRY_BUDGET_RATIO", 0.6, 0.05)
+# Si la base esta caida, reintentar las migraciones en cada consulta costaria un
+# connect_timeout por comando y volveria a reportar un falso timeout.
+DB_MIGRATION_RETRY_COOLDOWN = _env_float("DB_MIGRATION_RETRY_COOLDOWN", 60.0, 0.0)
+# El panel React consulta /api/bot/status cada 2s: cachear evita castigar la DB.
+DB_CHECK_CACHE_SECONDS = _env_float("DB_CHECK_CACHE_SECONDS", 10.0, 0.0)
+
+_MIGRATIONS_DONE = False
+_MIGRATIONS_LOCK = threading.Lock()
+_MIGRATIONS_ATTEMPT = {"last": 0.0}
+_CHECK_CACHE: dict = {}
+_POOL: "_ConnectionPool | None" = None
+_POOL_LOCK = threading.Lock()
 
 logger.info(f"[DB] Backend seleccionado: {DB_BACKEND} | USE_POSTGRES: {USE_POSTGRES} | DATABASE_URL: {'✅' if DATABASE_URL else '❌'}")
 
@@ -146,132 +182,145 @@ def connection_label() -> str:
     return f"SQLite local — {DB_PATH}"
 
 
+def _pg_migration_statements() -> list:
+    """Migraciones idempotentes de Postgres (se ejecutan una vez por proceso)."""
+    return [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_username TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_id TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_profile_url TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS dni_number TEXT",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS last_salary TIMESTAMP",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'",
+        "ALTER TABLE department_members ADD COLUMN IF NOT EXISTS username TEXT",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS username TEXT",
+        "ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT DEFAULT 'Ciudadano'",
+        "ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS age INTEGER DEFAULT 18",
+        "ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
+        "ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS weapon_type TEXT DEFAULT 'Arma de Fuego'",
+        "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS quantity INTEGER DEFAULT 1",
+        "ALTER TABLE auctions ADD COLUMN IF NOT EXISTS starting_price NUMERIC DEFAULT 0",
+        """CREATE TABLE IF NOT EXISTS criminal_records (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            crime_type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            fine_amount NUMERIC DEFAULT 0,
+            jail_time_minutes INTEGER DEFAULT 0,
+            officer_id TEXT NOT NULL,
+            officer_name TEXT,
+            status TEXT DEFAULT 'arrested',
+            paid BOOLEAN DEFAULT FALSE,
+            paid_at TIMESTAMP,
+            items_found TEXT,
+            items_seized TEXT,
+            rights_read BOOLEAN DEFAULT TRUE,
+            physical_state TEXT DEFAULT 'Ileso',
+            evidence_url TEXT,
+            roblox_username TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS guild_configs (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT UNIQUE NOT NULL,
+            police_role_ids TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_found TEXT",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_seized TEXT",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS rights_read BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS physical_state TEXT DEFAULT 'Ileso'",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS evidence_url TEXT",
+        "ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS roblox_username TEXT",
+        """CREATE TABLE IF NOT EXISTS update_config (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT UNIQUE NOT NULL,
+            channel_id TEXT,
+            auto_announce BOOLEAN DEFAULT TRUE,
+            github_repo TEXT DEFAULT 'Joseph1711/miami-vice-rp',
+            last_commit_sha TEXT,
+            draft_version TEXT,
+            draft_changes TEXT,
+            draft_description TEXT,
+            mention_role_id TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS bot_updates_history (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            version TEXT NOT NULL,
+            title TEXT NOT NULL,
+            changes TEXT NOT NULL,
+            description TEXT,
+            commit_sha TEXT,
+            source TEXT DEFAULT 'manual',
+            published_by TEXT,
+            channel_id TEXT,
+            message_id TEXT,
+            published_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS server_status (
+            guild_id TEXT PRIMARY KEY,
+            status TEXT DEFAULT 'CLOSED',
+            server_code TEXT DEFAULT 'MVERP',
+            updated_by TEXT,
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS server_votes (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            message_id TEXT NOT NULL,
+            creator_id TEXT NOT NULL,
+            status TEXT DEFAULT 'active',
+            duration_minutes INTEGER DEFAULT 5,
+            ends_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS server_vote_entries (
+            vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+            discord_id TEXT NOT NULL,
+            choice TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            PRIMARY KEY (vote_id, discord_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS server_vote_removals (
+            id TEXT PRIMARY KEY,
+            vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+            discord_id TEXT NOT NULL,
+            removed_at TIMESTAMP DEFAULT NOW()
+        )""",
+    ]
+
+
 def _ensure_schema_migrations(conn):
-    """Adds missing columns like username, display_name, dni_number, etc. if they do not exist yet."""
+    """Adds missing columns like username, display_name, dni_number, etc. if they do not exist yet.
+
+    Cada sentencia se intenta por separado: un ALTER sobre una tabla que aun no
+    existe no debe abortar el resto de la migracion.
+    """
     try:
         if USE_POSTGRES:
-            with conn.cursor() as cursor:
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT")
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT")
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_username TEXT")
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_id TEXT")
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS roblox_profile_url TEXT")
-                cursor.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dni_number TEXT")
-                cursor.execute("ALTER TABLE department_members ADD COLUMN IF NOT EXISTS username TEXT")
-                cursor.execute("ALTER TABLE company_members ADD COLUMN IF NOT EXISTS username TEXT")
-                cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT DEFAULT 'Ciudadano'")
-                cursor.execute("ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS age INTEGER DEFAULT 18")
-                cursor.execute("ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()")
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS criminal_records (
-                    id TEXT PRIMARY KEY,
-                    guild_id TEXT NOT NULL,
-                    discord_id TEXT NOT NULL,
-                    crime_type TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    fine_amount NUMERIC DEFAULT 0,
-                    jail_time_minutes INTEGER DEFAULT 0,
-                    officer_id TEXT NOT NULL,
-                    officer_name TEXT,
-                    status TEXT DEFAULT 'arrested',
-                    paid BOOLEAN DEFAULT FALSE,
-                    paid_at TIMESTAMP,
-                    items_found TEXT,
-                    items_seized TEXT,
-                    rights_read BOOLEAN DEFAULT TRUE,
-                    physical_state TEXT DEFAULT 'Ileso',
-                    evidence_url TEXT,
-                    roblox_username TEXT,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS guild_configs (
-                    id TEXT PRIMARY KEY,
-                    guild_id TEXT UNIQUE NOT NULL,
-                    police_role_ids TEXT,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_found TEXT")
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS items_seized TEXT")
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS rights_read BOOLEAN DEFAULT TRUE")
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS physical_state TEXT DEFAULT 'Ileso'")
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS evidence_url TEXT")
-                cursor.execute("ALTER TABLE criminal_records ADD COLUMN IF NOT EXISTS roblox_username TEXT")
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS update_config (
-                    id TEXT PRIMARY KEY,
-                    guild_id TEXT UNIQUE NOT NULL,
-                    channel_id TEXT,
-                    auto_announce BOOLEAN DEFAULT TRUE,
-                    github_repo TEXT DEFAULT 'Joseph1711/miami-vice-rp',
-                    last_commit_sha TEXT,
-                    draft_version TEXT,
-                    draft_changes TEXT,
-                    draft_description TEXT,
-                    mention_role_id TEXT,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS bot_updates_history (
-                    id TEXT PRIMARY KEY,
-                    guild_id TEXT NOT NULL,
-                    version TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    changes TEXT NOT NULL,
-                    description TEXT,
-                    commit_sha TEXT,
-                    source TEXT DEFAULT 'manual',
-                    published_by TEXT,
-                    channel_id TEXT,
-                    message_id TEXT,
-                    published_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS server_status (
-                    guild_id TEXT PRIMARY KEY,
-                    status TEXT DEFAULT 'CLOSED',
-                    server_code TEXT DEFAULT 'MVERP',
-                    updated_by TEXT,
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS server_votes (
-                    id TEXT PRIMARY KEY,
-                    guild_id TEXT NOT NULL,
-                    channel_id TEXT NOT NULL,
-                    message_id TEXT NOT NULL,
-                    creator_id TEXT NOT NULL,
-                    status TEXT DEFAULT 'active',
-                    duration_minutes INTEGER DEFAULT 5,
-                    ends_at TIMESTAMP NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS server_vote_entries (
-                    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
-                    discord_id TEXT NOT NULL,
-                    choice TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    PRIMARY KEY (vote_id, discord_id)
-                )
-                """)
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS server_vote_removals (
-                    id TEXT PRIMARY KEY,
-                    vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
-                    discord_id TEXT NOT NULL,
-                    removed_at TIMESTAMP DEFAULT NOW()
-                )
-                """)
-            conn.commit()
+            failed = []
+            for statement in _pg_migration_statements():
+                try:
+                    with conn.cursor() as cursor:
+                        cursor.execute(statement)
+                except Exception as stmt_error:
+                    failed.append((statement.split("\n")[0][:60], str(stmt_error).strip()))
+                    if not conn.autocommit:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+            if not conn.autocommit:
+                conn.commit()
+            if failed:
+                logger.warning("[DB] %d migracion(es) omitida(s): %s", len(failed), failed[:3])
         else:
             cursor = conn.execute("PRAGMA table_info(users)")
             existing_cols = {row[1] for row in cursor.fetchall()}
@@ -467,35 +516,165 @@ def _connect_sqlite() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute(f"PRAGMA busy_timeout = {DB_STATEMENT_TIMEOUT_MS}")
-    _ensure_schema_migrations(conn)
     return conn
 
 
-def _connect_postgres():
+def _pg_ok_status():
+    """Valor de 'conexion sana' segun la version de psycopg (ConnStatus/Status/PqStatus)."""
+    pq_module = getattr(psycopg, "pq", None)
+    for enum_name in ("ConnStatus", "Status", "PqStatus"):
+        enum = getattr(pq_module, enum_name, None)
+        if enum is not None and hasattr(enum, "OK"):
+            return enum.OK
+    return None
+
+
+_PG_OK_STATUS = _pg_ok_status() if psycopg is not None else None
+
+
+def _pg_is_alive(conn) -> bool:
+    try:
+        if conn.closed:
+            return False
+        if _PG_OK_STATUS is None:
+            return True
+        return conn.pgconn.status == _PG_OK_STATUS
+    except Exception:
+        return False
+
+
+def _pg_connect_kwargs(statement_timeout_ms: int) -> dict:
+    return dict(
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+        options=(
+            f"-c statement_timeout={statement_timeout_ms} "
+            f"-c lock_timeout={DB_LOCK_TIMEOUT_MS} "
+            "-c idle_in_transaction_session_timeout=0 "
+            "-c application_name=miami-vice-bot"
+        ),
+        row_factory=dict_row,
+    )
+
+
+def _connect_postgres(statement_timeout_ms: int | None = None):
+    """Conexion cruda, fuera del pool. El llamante es responsable de cerrarla."""
     if psycopg is None:
         raise RuntimeError("Falta psycopg[binary]. Instala las dependencias del proyecto.")
     if not DATABASE_URL:
         raise RuntimeError("SUPABASE_DB_URL no está configurada.")
-    conn = psycopg.connect(
+    return psycopg.connect(
         DATABASE_URL,
-        connect_timeout=10,
-        options=f"-c statement_timeout={DB_STATEMENT_TIMEOUT_MS} -c lock_timeout={min(DB_STATEMENT_TIMEOUT_MS, 3000)}",
-        row_factory=dict_row,
+        **_pg_connect_kwargs(statement_timeout_ms or DB_STATEMENT_TIMEOUT_MS),
     )
-    _ensure_schema_migrations(conn)
-    return conn
+
+
+class _ConnectionPool:
+    """Pool minimo de conexiones psycopg.
+
+    Evita un handshake TLS completo por cada consulta. Cada conexion se toma en
+    exclusiva (un hilo = una conexion) y vuelve al pool al terminar.
+    """
+
+    def __init__(self, max_size: int):
+        self._max_size = max_size
+        self._idle: deque = deque()
+        self._lock = threading.Lock()
+        self._slots = threading.Semaphore(max_size)
+        self._total_created = 0
+
+    def _new_connection(self):
+        conn = _connect_postgres()
+        with self._lock:
+            self._total_created += 1
+            if self._total_created == 1:
+                logger.info("[DB] Pool de conexiones Postgres abierto (max=%d)", self._max_size)
+        return conn
+
+    @staticmethod
+    def _close_quietly(conn) -> None:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    def acquire(self, timeout: float | None = None) -> "psycopg.Connection":
+        wait = DB_POOL_WAIT_SECONDS if timeout is None else timeout
+        if not self._slots.acquire(timeout=wait):
+            raise TimeoutError(f"El pool de base de datos esta saturado (>{self._max_size} consultas)")
+        try:
+            while True:
+                with self._lock:
+                    conn = self._idle.popleft() if self._idle else None
+                if conn is None:
+                    return self._new_connection()
+                if _pg_is_alive(conn):
+                    return conn
+                # El host remoto cerro la sesion o la conexion murio: descartar.
+                self._close_quietly(conn)
+                with self._lock:
+                    self._total_created = max(0, self._total_created - 1)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def release(self, conn, discard: bool = False) -> None:
+        try:
+            if discard or not _pg_is_alive(conn):
+                self._close_quietly(conn)
+                with self._lock:
+                    self._total_created = max(0, self._total_created - 1)
+                return
+            with self._lock:
+                self._idle.append(conn)
+        finally:
+            self._slots.release()
+
+    def close(self) -> None:
+        with self._lock:
+            idle, self._idle = list(self._idle), deque()
+        for conn in idle:
+            self._close_quietly(conn)
+
+
+@contextmanager
+def _pg_connection():
+    """Conexion del pool para el camino caliente. Vive una sola consulta."""
+    pool = _get_pool()
+    conn = pool.acquire()
+    discard = False
+    try:
+        yield conn
+    except BaseException:
+        discard = True
+        raise
+    finally:
+        pool.release(conn, discard=discard)
+
+
+def _get_pool() -> "_ConnectionPool":
+    global _POOL
+    if _POOL is not None:
+        return _POOL
+    with _POOL_LOCK:
+        if _POOL is None:
+            if psycopg is None:
+                raise RuntimeError("Falta psycopg[binary]. Instala las dependencias del proyecto.")
+            if not DATABASE_URL:
+                raise RuntimeError("SUPABASE_DB_URL no está configurada.")
+            _POOL = _ConnectionPool(DB_POOL_MAX_SIZE)
+    return _POOL
 
 
 def _connect():
-    global USE_POSTGRES, DB_BACKEND
+    """Conexion nueva y limpia, fuera del pool. El llamante la cierra."""
     if USE_POSTGRES:
         try:
             return _connect_postgres()
         except Exception as pg_err:
-            logger.warning(f"[DB] Conexión a PostgreSQL fallida ({pg_err}). Usando fallback a SQLite...")
-            USE_POSTGRES = False
-            DB_BACKEND = "sqlite"
-            return _connect_sqlite()
+            # No se degrada a SQLite en caliente: el bot terminaria escribiendo
+            # datos fiscales en un archivo local distinto de la base real.
+            logger.error(f"[DB] Conexión a PostgreSQL fallida ({pg_err})")
+            raise
     return _connect_sqlite()
 
 
@@ -513,6 +692,60 @@ def get_conn():
     return _connect()
 
 
+def run_migrations(force: bool = False) -> bool:
+    """Aplica las migraciones idempotentes UNA sola vez por proceso.
+
+    Antes se ejecutaban dentro de cada conexion: ~30 DDL por comando, con lock
+    ACCESS EXCLUSIVE sobre users/dni_records, que bloqueaban al bot hasta
+    agotar el timeout. Ahora corren al arrancar y nunca mas.
+    """
+    global _MIGRATIONS_DONE
+    if _MIGRATIONS_DONE and not force:
+        return False
+    _MIGRATIONS_ATTEMPT["last"] = time.monotonic()
+    with _MIGRATIONS_LOCK:
+        if _MIGRATIONS_DONE and not force:
+            return False
+        started = time.monotonic()
+        if USE_POSTGRES and DATABASE_URL and psycopg is not None:
+            conn = _connect_postgres(DB_MIGRATION_TIMEOUT_MS)
+            # Cada sentencia DDL es independiente: asi una tabla ausente no
+            # envenena la transaccion para el resto de migraciones.
+            conn.autocommit = True
+        else:
+            conn = _connect_sqlite()
+        try:
+            _ensure_schema_migrations(conn)
+            if USE_POSTGRES and not conn.autocommit:
+                conn.commit()
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        _MIGRATIONS_DONE = True
+        logger.info(
+            "[DB] Migraciones aplicadas en %.0f ms (backend=%s)",
+            (time.monotonic() - started) * 1000,
+            "postgres" if USE_POSTGRES else "sqlite",
+        )
+        return True
+
+
+def _ensure_migrations_done() -> None:
+    """Dispara las migraciones una unica vez, sin castigar si la DB no responde."""
+    if _MIGRATIONS_DONE:
+        return
+    if DB_MIGRATION_RETRY_COOLDOWN > 0:
+        elapsed = time.monotonic() - _MIGRATIONS_ATTEMPT["last"]
+        if _MIGRATIONS_ATTEMPT["last"] and elapsed < DB_MIGRATION_RETRY_COOLDOWN:
+            return
+    try:
+        run_migrations()
+    except Exception as error:
+        logger.error(f"[DB] Migraciones fallidas: {error}")
+
+
 def _fetch_result(cursor, fetch):
     if fetch == "one":
         row = cursor.fetchone()
@@ -524,66 +757,193 @@ def _fetch_result(cursor, fetch):
     return None
 
 
-def execute(query, params=None, fetch=None):
-    conn = _connect()
-    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=not USE_POSTGRES)
-    started = time.monotonic()
-    try:
-        if USE_POSTGRES:
-            with conn.cursor() as cursor:
-                cursor.execute(raw, safe_params or ())
-                result = _fetch_result(cursor, fetch)
-            conn.commit()
-        else:
-            cursor = conn.execute(raw, safe_params or ())
-            result = _fetch_result(cursor, fetch)
-        elapsed_ms = (time.monotonic() - started) * 1000
-        if elapsed_ms > SLOW_QUERY_MS:
-            logger.warning("[DB][SLOW %.0fms] %s", elapsed_ms, raw[:120])
-        return result
-    except Exception as error:
-        if USE_POSTGRES:
+def _run_query(raw: str, safe_params: tuple, fetch, use_postgres: bool):
+    """Ejecuta una sentencia sobre una conexion del pool (o SQLite efimera)."""
+    if use_postgres:
+        with _pg_connection() as conn:
             try:
-                conn.rollback()
-            except Exception:
-                pass
-        logger.error("[DB] Error en query: %s | Query: %s | Params: %s", error, raw[:200], safe_params)
-        raise
+                with conn.cursor() as cursor:
+                    cursor.execute(raw, safe_params or ())
+                    result = _fetch_result(cursor, fetch)
+                conn.commit()
+                return result
+            except BaseException:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+    conn = _connect_sqlite()
+    try:
+        cursor = conn.execute(raw, safe_params or ())
+        return _fetch_result(cursor, fetch)
     finally:
         conn.close()
+
+
+# Estados SQL que garantizan que la sentencia NO llego a aplicarse.
+_UNCOMMITTED_SQLSTATES = {"57014", "40001", "40P01", "55P03", "53300", "25006"}
+
+
+def _error_type(owner, name):
+    return getattr(owner, name, None)
+
+
+def _is_uncommitted_error(error: BaseException) -> bool:
+    """El servidor asegura que la sentencia fallo: reintentar es seguro."""
+    if getattr(error, "sqlstate", None) in _UNCOMMITTED_SQLSTATES:
+        return True
+    if isinstance(error, sqlite3.OperationalError):
+        text = str(error).lower()
+        return "locked" in text or "busy" in text
+    if psycopg is None:
+        return False
+    types = tuple(
+        t
+        for t in (
+            _error_type(psycopg.errors, "LockNotAvailable"),
+            _error_type(psycopg.errors, "QueryCanceled"),
+            _error_type(psycopg.errors, "SerializationFailure"),
+            _error_type(psycopg.errors, "DeadlockDetected"),
+        )
+        if t is not None
+    )
+    return bool(types) and isinstance(error, types)
+
+
+def _is_connection_error(error: BaseException) -> bool:
+    """Fallo a nivel de conexion: el estado en el servidor es desconocido."""
+    if isinstance(error, sqlite3.OperationalError):
+        text = str(error).lower()
+        return "locked" in text or "busy" in text
+    if getattr(error, "sqlstate", None) in {"08000", "08001", "08003", "08004", "08006", "08P01"}:
+        return True
+    if psycopg is None:
+        return False
+    types = tuple(
+        t
+        for t in (
+            _error_type(psycopg, "OperationalError"),
+            _error_type(psycopg, "InterfaceError"),
+        )
+        if t is not None
+    )
+    return bool(types) and isinstance(error, types)
+
+
+def _should_retry(error: BaseException, fetch, attempt: int) -> bool:
+    if attempt >= DB_RETRY_ATTEMPTS:
+        return False
+    # Errores que garantizan que la sentencia no se aplico: seguros incluso
+    # para escrituras.
+    if _is_uncommitted_error(error):
+        return True
+    # Conexion caida durante una escritura seria ambiguo (puede haberse
+    # aplicado justo antes), asi que solo se reintenta en lecturas.
+    return _is_connection_error(error) and fetch in ("one", "all")
+
+
+def _retry_budget_exhausted(started: float) -> bool:
+    """Los reintentos no pueden comerse el presupuesto de _run_db_operation.
+
+    Si lo hicieran, asyncio.wait_for cortaria y el usuario volveria a ver el
+    falso "la base de datos tardo demasiado" en vez del error real.
+    """
+    return (time.monotonic() - started) > DB_OPERATION_TIMEOUT_SECONDS * DB_RETRY_BUDGET_RATIO
+
+
+def _can_retry(error: BaseException, fetch, attempt: int, started: float, backoff: float) -> bool:
+    if not _should_retry(error, fetch, attempt):
+        return False
+    deadline = started + DB_OPERATION_TIMEOUT_SECONDS * DB_RETRY_BUDGET_RATIO
+    return time.monotonic() + backoff < deadline
+
+
+def execute(query, params=None, fetch=None):
+    _ensure_migrations_done()
+    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=not USE_POSTGRES)
+    started = time.monotonic()
+    attempt = 1
+    while True:
+        try:
+            result = _run_query(raw, safe_params, fetch, USE_POSTGRES)
+            elapsed_ms = (time.monotonic() - started) * 1000
+            if elapsed_ms > SLOW_QUERY_MS:
+                logger.warning("[DB][SLOW %.0fms] %s", elapsed_ms, raw[:120])
+            return result
+        except Exception as error:
+            backoff = DB_RETRY_BACKOFF_SECONDS * attempt
+            if _can_retry(error, fetch, attempt, started, backoff):
+                attempt += 1
+                logger.warning(
+                    "[DB] Reintento %d/%d tras error transitorio (%s): %s",
+                    attempt,
+                    DB_RETRY_ATTEMPTS,
+                    type(error).__name__,
+                    error,
+                )
+                if backoff:
+                    time.sleep(backoff)
+                continue
+            logger.error(
+                "[DB] Error en query: %s | Query: %s | Params: %s",
+                error,
+                raw[:200],
+                safe_params if USE_POSTGRES else "-",
+            )
+            raise
 
 
 def execute_many(queries):
-    conn = _connect()
+    _ensure_migrations_done()
     started = time.monotonic()
-    try:
-        if USE_POSTGRES:
-            with conn.cursor() as cursor:
-                for query, params in queries:
-                    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=False)
-                    cursor.execute(raw, safe_params or ())
-            conn.commit()
-        else:
-            for query, params in queries:
-                raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=True)
-                conn.execute(raw, safe_params or ())
-        elapsed_ms = (time.monotonic() - started) * 1000
-        if elapsed_ms > SLOW_QUERY_MS:
-            logger.warning("[DB][SLOW BATCH %.0fms] %s queries", elapsed_ms, len(queries))
-    except Exception as error:
-        if USE_POSTGRES:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-        logger.error("[DB] Error en execute_many: %s", error)
-        raise
-    finally:
-        conn.close()
+    attempt = 1
+    while True:
+        try:
+            if USE_POSTGRES:
+                with _pg_connection() as conn:
+                    try:
+                        with conn.cursor() as cursor:
+                            for query, params in queries:
+                                raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=False)
+                                cursor.execute(raw, safe_params or ())
+                        conn.commit()
+                    except BaseException:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
+                        raise
+            else:
+                conn = _connect_sqlite()
+                try:
+                    for query, params in queries:
+                        raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=True)
+                        conn.execute(raw, safe_params or ())
+                finally:
+                    conn.close()
+            elapsed_ms = (time.monotonic() - started) * 1000
+            if elapsed_ms > SLOW_QUERY_MS:
+                logger.warning("[DB][SLOW BATCH %.0fms] %s queries", elapsed_ms, len(queries))
+            return None
+        except Exception as error:
+            backoff = DB_RETRY_BACKOFF_SECONDS * attempt
+            if _can_retry(error, None, attempt, started, backoff):
+                attempt += 1
+                logger.warning("[DB] Reintento %d/%d en lote: %s", attempt, DB_RETRY_ATTEMPTS, error)
+                if backoff:
+                    time.sleep(backoff)
+                continue
+            logger.error("[DB] Error en execute_many: %s", error)
+            raise
 
 
 def initialize_schema(schema: str):
-    conn = _connect()
+    """Crea el esquema completo. Solo en arranque: usa conexion propia y timeout amplio."""
+    if USE_POSTGRES:
+        conn = _connect_postgres(DB_MIGRATION_TIMEOUT_MS)
+    else:
+        conn = _connect_sqlite()
     try:
         if USE_POSTGRES:
             with conn.cursor() as cursor:
@@ -596,10 +956,19 @@ def initialize_schema(schema: str):
                 conn.executescript(_to_sqlite(schema))
     except Exception:
         if USE_POSTGRES:
-            conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         raise
     finally:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
+    # Las migraciones van DESPUES: los ALTER COLUMN necesitan que las tablas
+    # del esquema ya existan.
+    _ensure_migrations_done()
 
 
 async def _run_db_operation(operation, *args):
@@ -624,8 +993,19 @@ async def aexecute_many(queries):
     return await _run_db_operation(execute_many, queries)
 
 
-def check_connection() -> dict:
-    global USE_POSTGRES, DB_BACKEND
+def check_connection(force: bool = False) -> dict:
+    """Prueba de vida de la base de datos. Solo `SELECT 1` sobre el pool.
+
+    El panel web la llama cada 2s, asi que NO ejecuta migraciones ni abre
+    conexiones nuevas: antes cada sondeo corria ~30 DDL y bloqueaba al bot.
+    El resultado se cachea `DB_CHECK_CACHE_SECONDS` segundos.
+    """
+    now = time.monotonic()
+    if not force and DB_CHECK_CACHE_SECONDS > 0:
+        cached = _CHECK_CACHE.get("result")
+        if cached and (now - cached["at"]) < DB_CHECK_CACHE_SECONDS:
+            return dict(cached["data"])
+
     result = {
         "ok": False,
         "masked_url": _mask_url(DATABASE_URL) if USE_POSTGRES else f"sqlite:///{DB_PATH}",
@@ -635,29 +1015,38 @@ def check_connection() -> dict:
     }
     if USE_POSTGRES:
         try:
-            conn = _connect_postgres()
+            with _pg_connection() as conn:
+                try:
+                    with conn.cursor() as cursor:
+                        cursor.execute("SELECT 1 AS ok")
+                        result["ok"] = bool(cursor.fetchone())
+                    conn.commit()
+                except BaseException:
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
+                    raise
+        except Exception as pg_err:
+            # No se degrada el backend global aqui: un fallo puntual del panel no
+            # debe mandar al bot a escribir a la SQLite local.
+            logger.warning(f"[DB] Falló la prueba de conexión a Postgres ({pg_err})")
+            result["ok"] = False
+            result["error"] = f"postgres: {pg_err}"
+    else:
+        try:
+            conn = _connect_sqlite()
             try:
-                with conn.cursor() as cursor:
-                    cursor.execute("SELECT 1 AS ok")
-                    result["ok"] = bool(cursor.fetchone())
+                result["ok"] = bool(conn.execute("SELECT 1 AS ok").fetchone())
+                result["masked_url"] = f"sqlite:///{DB_PATH}"
+                result["backend"] = "sqlite"
+                result["ssl"] = "no aplica"
+                result["error"] = None
             finally:
                 conn.close()
-            return result
-        except Exception as pg_err:
-            logger.warning(f"[DB] Falló conexión a Postgres ({pg_err}). Activando fallback a SQLite local...")
-            USE_POSTGRES = False
-            DB_BACKEND = "sqlite"
+        except Exception as error:
+            result["error"] = f"sqlite: {error}"
 
-    try:
-        conn = _connect_sqlite()
-        try:
-            result["ok"] = bool(conn.execute("SELECT 1 AS ok").fetchone())
-            result["masked_url"] = f"sqlite:///{DB_PATH}"
-            result["backend"] = "sqlite"
-            result["ssl"] = "no aplica"
-            result["error"] = None
-        finally:
-            conn.close()
-    except Exception as error:
-        result["error"] = f"sqlite: {error}"
+    if DB_CHECK_CACHE_SECONDS > 0:
+        _CHECK_CACHE["result"] = {"at": now, "data": dict(result)}
     return result
