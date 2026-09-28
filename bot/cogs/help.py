@@ -288,7 +288,7 @@ HELP_CATEGORIES = {
         "emoji": "⚙️",
         "label": "Administración del Servidor",
         "commands": [
-            ("/guia indice", "Manual completo de los comandos, de mayor a menor importancia"),
+            ("/guia", "Manual completo de los comandos, de mayor a menor importancia"),
             ("/admin configuracion rol_admin @rol", "Configurar el rol exclusivo para usar comandos admin"),
             ("/admin configuracion canal_trabajos #canal", "Configurar canal para recibir reportes de /trabajar"),
             ("/admin configuracion canal_postulaciones #canal", "Configurar canal para recibir postulaciones de departamentos"),

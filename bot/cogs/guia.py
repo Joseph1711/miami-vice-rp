@@ -4,6 +4,10 @@ Documenta **todos** los comandos del bot, agrupados por area y ordenados de mas
 a menos importante: lo que hay que configurar antes de abrir el servidor va
 primero, y las utilidades de comodidad van al final.
 
+Es un unico comando: al invocarlo se entrega el indice y despues todas las
+secciones, paginadas para respetar los limites de Discord. No se crean
+subcomandos, de modo que la lista de comandos del bot no crece.
+
 El catalogo se declara en `SECCIONES` y se contrasta automaticamente contra el
 arbol real de `app_commands`, de modo que un comando nuevo sin documentar o una
 ruta mal escrita se detectan de inmediato.
@@ -188,22 +192,22 @@ SECCIONES = [
              "Dueno / Gerente"),
             ("/empresa panel", "Abre el panel con botones de caja, nomina, menu, plantilla y "
                                "finanzas.", "Dueno / Gerente"),
-            ("/empresa info", "Ficha publica de una empresa: caja, estado, plantilla y valor.",
-             "Todos"),
+            ("/empresa info", "Ficha publica de una empresa: caja, estado, plantilla y valor. La ve todo "
+                             "el canal.", "Todos"),
             ("/empresa caja", "Caja actual, ultimas nominas y ultimos movimientos registrados.",
              "Dueno / Gerente"),
             ("/empresa nomina", "Paga la nomina pendiente desde la caja. Si la caja no alcanza, "
                                 "paga solo el porcentaje que cubre y avisa del resto.",
              "Dueno / Gerente"),
-            ("/empresa menu", "Muestra productos y servicios con los precios que fijo el dueno.",
-             "Todos"),
+            ("/empresa menu", "Muestra productos y servicios con los precios que fijo el dueno. Publico y "
+                           "con boton de compra.", "Todos"),
             ("/empresa plantilla puestos", "Puestos definidos por el dueno, con su salario y su "
                                            "cupo.", "Dueno / Gerente"),
             ("/empresa plantilla crear_puesto", "Crea o edita un puesto con nombre, salario, rol de "
                                                 "Discord, permisos y maximo de empleados.",
              "Dueno"),
-            ("/empresa plantilla empleados", "Lista la plantilla de la empresa.",
-             "Dueno / Gerente"),
+            ("/empresa plantilla empleados", "Lista la plantilla de la empresa. Publico.",
+             "Todos"),
             ("/empresa plantilla contratar", "Contrata a un ciudadano en un puesto. El salario sale "
                                              "de la caja y genera su primera nomina pendiente.",
              "Dueno / Gerente"),
@@ -563,15 +567,14 @@ def _indice_embed() -> discord.Embed:
         description=(
             f"Manual de los **{total_comandos()} comandos** del bot, ordenados de mas a menos "
             f"importante.\nCada seccion explica **que hace** cada comando, **como se usa** y **quien "
-            f"puede** usarlo. Abre el detalle con `/guia <seccion>`."
+            f"puede** usarlo. A continuacion se envian todas las secciones en orden."
         ),
         colour=COLOR,
     )
     for seccion in secciones:
         embed.add_field(
             name=f"{seccion['emoji']} {seccion['prioridad']}. {seccion['nombre']}",
-            value=f"{seccion['resumen']}\n`/guia {seccion['clave']}` \u00b7 "
-                  f"{len(seccion['comandos'])} comandos"[:FIELD_MAX],
+            value=f"{seccion['resumen']}\n**{len(seccion['comandos'])} comandos**"[:FIELD_MAX],
             inline=False,
         )
     embed.set_footer(text="MVERP \u00b7 Solo administradores")
@@ -600,87 +603,40 @@ def _bloques(seccion):
     return embeds
 
 
-async def _enviar_indice(interaction: discord.Interaction):
-    await interaction.response.send_message(embed=_indice_embed(), ephemeral=True)
+def _todos_los_embeds():
+    """Indice seguido de todas las secciones, ya paginado para Discord."""
+    embeds = [_indice_embed()]
+    for seccion in secciones_ordenadas():
+        embeds += _bloques(seccion)
+    return embeds
 
 
-async def _enviar_seccion(interaction: discord.Interaction, seccion):
-    embeds = _bloques(seccion)
-    await interaction.response.edit_message(embed=embeds[0])
-    for embed in embeds[1:]:
-        await interaction.followup.send(embed=embed, ephemeral=True)
+class Guia(commands.Cog):
+    """Manual completo de funcionamiento, reservado a administradores."""
 
+    def __init__(self, bot):
+        self.bot = bot
 
-async def _indice_callback(interaction: discord.Interaction):
-    if not await _permiso(interaction):
-        return
-    await _enviar_indice(interaction)
-
-
-def _seccion_callback(seccion):
-    """Manejador de `/guia <seccion>` con su catalogo ya capturado."""
-    async def ejecutar(interaction: discord.Interaction):
-        if not await _permiso(interaction):
-            return
-        await interaction.response.defer(ephemeral=True)
-        await _enviar_seccion(interaction, seccion)
-    ejecutar.__name__ = f"guia_{seccion['clave']}"
-    return ejecutar
-
-
-def _cog_init(self, bot):
-    self.bot = bot
-
-
-async def _cog_load(self):
-    logger.info("[Guia] %d secciones y %d comandos documentados",
-                len(SECCIONES), total_comandos())
-
-
-def _construir_cog():
-    """Arma la clase del Cog con todos sus subcomandos de una vez.
-
-    `CogMeta` captura los `app_commands` en el momento de crear la clase, asi
-    que anadirlos despues con `setattr` no tendria efecto. Por eso el grupo y
-    sus subcomandos se entregan ya montados en el namespace de la clase.
-    """
-    grupo = app_commands.Group(
+    @app_commands.command(
         name="guia",
         description="Manual de funcionamiento de todos los comandos, de mayor a menor importancia",
     )
-    # El nombre del subcomando es solo el identificador: Discord no admite
-    # espacios ni emoji en el nombre. El emoji se ve en la descripcion y en los
-    # embeds. Cada subcomando se crea sin padre y se engancha al grupo a mano,
-    # que es lo que hace el decorador `Group.command`.
-    subs = [app_commands.Command(
-        name="indice",
-        description="Mapa de todas las secciones, de mayor a menor importancia",
-        callback=_indice_callback,
-    )]
-    subs += [app_commands.Command(
-        name=seccion["clave"],
-        description=f"{seccion['emoji']} {seccion['resumen']}"[:100],
-        callback=_seccion_callback(seccion),
-    ) for seccion in SECCIONES]
-    for sub in subs:
-        grupo.add_command(sub)
+    async def guia(self, interaction: discord.Interaction):
+        """Envia el indice y todas las secciones del manual."""
+        if not await _permiso(interaction):
+            return
+        embeds = _todos_los_embeds()
+        total = len(embeds)
+        for numero, embed in enumerate(embeds, start=1):
+            embed.set_footer(text=f"MVERP \u00b7 {numero}/{total}")
+            if numero == 1:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+            else:
+                await interaction.followup.send(embed=embed, ephemeral=True)
 
-    namespace = {
-        "__doc__": "Manual completo de funcionamiento, reservado a administradores.",
-        "__init__": _cog_init,
-        "cog_load": _cog_load,
-        "guia": grupo,
-    }
-    return type("Guia", (commands.Cog,), namespace)
-
-
-if len(SECCIONES) + 1 > 25:
-    raise ValueError(
-        f"/guia tendria {len(SECCIONES) + 1} subcomandos y Discord admite 25. "
-        "Reduce SECCIONES o agrupalas."
-    )
-
-Guia = _construir_cog()
+    async def cog_load(self):
+        logger.info("[Guia] %d secciones y %d comandos documentados en un unico comando",
+                    len(SECCIONES), total_comandos())
 
 
 async def setup(bot: commands.Bot):

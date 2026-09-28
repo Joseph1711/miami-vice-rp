@@ -565,7 +565,7 @@ class Companies(commands.Cog):
     @empresa.command(name="info", description="Ficha publica de una empresa")
     @app_commands.describe(empresa="Nombre de la empresa")
     async def info(self, interaction: discord.Interaction, empresa: str):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await _resolve_company(interaction, empresa)
         if not company:
             await interaction.followup.send(
@@ -573,16 +573,17 @@ class Companies(commands.Cog):
                 ephemeral=True)
             return
         access = await B.resolve_access(str(interaction.guild_id), str(interaction.user.id), company["id"])
+        # Ficha publica: la ve todo el canal.
         await interaction.followup.send(
-            embed=await UI.company_dossier(company["id"], access, str(interaction.guild_id)),
-            ephemeral=True)
+            embed=await UI.company_dossier(company["id"], access, str(interaction.guild_id),
+                                           mostrar_acceso=False))
 
     # -- Puestos y plantilla ------------------------------------------------
 
     @plantilla.command(name="puestos", description="Ver los puestos y sus salarios")
     @app_commands.describe(empresa="Nombre de la empresa")
     async def puestos(self, interaction: discord.Interaction, empresa: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await _resolve_company(interaction, empresa)
         if not company:
             await interaction.followup.send(embed=error_embed("Empresa no encontrada", "Indica el nombre."),
@@ -590,7 +591,7 @@ class Companies(commands.Cog):
             return
         positions = await B.company_positions(company["id"])
         employees = await B.company_employees(company["id"])
-        await interaction.followup.send(embed=UI.positions_embed(positions, employees), ephemeral=True)
+        await interaction.followup.send(embed=UI.positions_embed(positions, employees))
 
     @plantilla.command(name="crear_puesto", description="Definir un puesto y su salario (dueño)")
     async def crear_puesto(self, interaction: discord.Interaction):
@@ -604,14 +605,14 @@ class Companies(commands.Cog):
     @plantilla.command(name="empleados", description="Ver la plantilla de la empresa")
     @app_commands.describe(empresa="Nombre de la empresa")
     async def empleados(self, interaction: discord.Interaction, empresa: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await _resolve_company(interaction, empresa)
         if not company:
             await interaction.followup.send(embed=error_embed("Empresa no encontrada", "Indica el nombre."),
                                            ephemeral=True)
             return
         employees = await B.company_employees(company["id"])
-        await interaction.followup.send(embed=UI.employees_embed(employees, company), ephemeral=True)
+        await interaction.followup.send(embed=UI.employees_embed(employees, company))
 
     @plantilla.command(name="contratar", description="Contratar a un ciudadano")
     @app_commands.describe(usuario="Ciudadano a contratar")
@@ -836,7 +837,7 @@ class Companies(commands.Cog):
     @empresa.command(name="menu", description="Ver productos y servicios con sus precios")
     @app_commands.describe(empresa="Nombre de la empresa")
     async def menu(self, interaction: discord.Interaction, empresa: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await _resolve_company(interaction, empresa)
         if not company:
             await interaction.followup.send(embed=error_embed("Empresa no encontrada", "Indica el nombre."),
@@ -845,13 +846,11 @@ class Companies(commands.Cog):
         items = await B.company_catalog(company["id"], only_active=True)
         if not items:
             await interaction.followup.send(
-                embed=info_embed("Menú vacío", f"**{company['name']}** todavia no ofrece nada."),
-                ephemeral=True)
+                embed=info_embed("Menú vacío", f"**{company['name']}** todavia no ofrece nada."))
             return
         await interaction.followup.send(
             embed=UI.catalog_embed(items, company),
-            view=CatalogBuyView(company["id"], str(interaction.user.id), items),
-            ephemeral=True)
+            view=CatalogBuyView(company["id"], str(interaction.user.id), items))
 
     @catalogo.command(name="agregar_producto", description="Añadir un producto al menú (define tú el precio)")
     async def agregar_producto(self, interaction: discord.Interaction):
@@ -917,7 +916,7 @@ class Companies(commands.Cog):
     @sociedad.command(name="acciones", description="Ver el capital social y los accionistas")
     @app_commands.describe(empresa="Nombre de la empresa")
     async def acciones(self, interaction: discord.Interaction, empresa: str = None):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await _resolve_company(interaction, empresa)
         if not company:
             await interaction.followup.send(embed=error_embed("Empresa no encontrada", "Indica el nombre."),
@@ -925,8 +924,7 @@ class Companies(commands.Cog):
             return
         config = await B.company_shares_config(company["id"])
         holders = await B.company_shareholders(company["id"])
-        await interaction.followup.send(
-            embed=UI.shares_embed(config, holders, company), ephemeral=True)
+        await interaction.followup.send(embed=UI.shares_embed(config, holders, company))
 
     @sociedad.command(name="emitir_acciones", description="Definir el capital social (dueño)")
     async def emitir_acciones(self, interaction: discord.Interaction):
@@ -1010,7 +1008,7 @@ class Companies(commands.Cog):
     )
     @app_commands.describe(estado="Nuevo estado", motivo="Motivo del cambio")
     async def estado(self, interaction: discord.Interaction, estado: str, motivo: str = ""):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         company = await B.get_owned_company(str(interaction.guild_id), str(interaction.user.id))
         if not company:
             await interaction.followup.send(
@@ -1023,10 +1021,10 @@ class Companies(commands.Cog):
             await _report(interaction, error)
             return
         info = B.COMPANY_STATUS.get(estado, B.COMPANY_STATUS["active"])
+        # El cambio de estado es publico: todo el canal debe verlo.
         await interaction.followup.send(
             embed=success_embed("Estado actualizado", f"{info['emoji']} **{info['label']}**"
-                                + (f"\n{motivo}" if motivo else "")),
-            ephemeral=True)
+                                + (f"\n{motivo}" if motivo else "")))
 
     @negocio.command(name="vender_empresa", description="Poner tu empresa en venta")
     @app_commands.describe(precio="Precio de venta pedido")
@@ -1057,12 +1055,11 @@ class Companies(commands.Cog):
 
     @negocio.command(name="mercado", description="Comprar empresas en venta")
     async def mercado(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         listings = await B.for_sale_market(str(interaction.guild_id))
         if not listings:
             await interaction.followup.send(
-                embed=info_embed("Mercado vacío", "No hay empresas en venta ahora mismo."),
-                ephemeral=True)
+                embed=info_embed("Mercado vacío", "No hay empresas en venta ahora mismo."))
             return
         embed = info_embed("\U0001F3E2 Empresas en venta", "El importe pagado entra en la caja del negocio.")
         for listing in listings[:10]:
@@ -1074,8 +1071,7 @@ class Companies(commands.Cog):
             )
         await interaction.followup.send(
             embed=embed,
-            view=MarketBuyView(str(interaction.guild_id), str(interaction.user.id), listings),
-            ephemeral=True)
+            view=MarketBuyView(str(interaction.guild_id), str(interaction.user.id), listings))
 
     @negocio.command(name="comprar_empresa", description="Comprar una empresa en venta por su nombre")
     @app_commands.describe(empresa="Nombre de la empresa en venta")

@@ -65,8 +65,14 @@ def job_line(job) -> str:
 # ---------------------------------------------------------------------------
 
 
-async def company_dossier(company_id: str, viewer_access: dict, guild_id: str):
-    """Panel principal de la empresa para quien la consulta."""
+async def company_dossier(company_id: str, viewer_access: dict, guild_id: str,
+                          mostrar_acceso: bool = True):
+    """Panel principal de la empresa para quien la consulta.
+
+    `mostrar_acceso` añade el tramo "Tu acceso", que es personal de quien
+    consulta. Las fichas publicas deben pasarlo en False para no delatar los
+    permisos de quien mira.
+    """
     company = viewer_access.get("company") or await B.get_company(company_id, guild_id)
     embed = discord.Embed(
         title=f"{company.get('emoji') or '\U0001F3E2'} {company.get('name')}",
@@ -88,18 +94,20 @@ async def company_dossier(company_id: str, viewer_access: dict, guild_id: str):
         value=(f"{money(total_due)} pendientes" if total_due else "Al día"),
         inline=True,
     )
-    embed.add_field(
-        name="Tu acceso",
-        value=f"{level_label(viewer_access)}\n{perm_summary(viewer_access.get('permissions'))}",
-        inline=False,
-    )
+    if mostrar_acceso:
+        embed.add_field(
+            name="Tu acceso",
+            value=f"{level_label(viewer_access)}\n{perm_summary(viewer_access.get('permissions'))}",
+            inline=False,
+        )
     if company.get("status") == "for_sale" and company.get("sale_price"):
         embed.add_field(
             name="\U0001F3E2 En venta",
             value=f"Precio: **{money(company.get('sale_price'))}**",
             inline=False,
         )
-    embed.set_footer(text="Usa los botones para gestionar la empresa")
+    if mostrar_acceso:
+        embed.set_footer(text="Usa los botones para gestionar la empresa")
     return embed
 
 
