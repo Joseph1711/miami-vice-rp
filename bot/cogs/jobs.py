@@ -412,3 +412,7 @@ async def _remove_job_roles(guild, member, left_job):
         await member.remove_roles(role, reason="Renuncia al empleo publico")
     except discord.Forbidden:
         logger.debug("[Empleos] No se pudo quitar el rol %s a %s", role.id, member.id)
+
+
+async def setup(bot):
+    await bot.add_cog(Jobs(bot))
