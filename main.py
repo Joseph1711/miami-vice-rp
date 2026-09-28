@@ -50,6 +50,7 @@ COGS = [
     "bot.cogs.inventory",
     "bot.cogs.marketplace",
     "bot.cogs.companies",
+    "bot.cogs.jobs",
     "bot.cogs.properties",
     "bot.cogs.vehicles",
     "bot.cogs.weapons",
@@ -67,6 +68,7 @@ COGS = [
     "bot.cogs.server_control",
     "bot.cogs.admin",
     "bot.cogs.help",
+    "bot.cogs.guia",
 ]
 
 class MiamiViceBot(commands.Bot):

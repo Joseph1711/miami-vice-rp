@@ -2,6 +2,7 @@ node_modules/
 build/
 coverage/
 .DS_Store
+.directory
 *.log
 .env*
 !.env.example
@@ -13,3 +14,32 @@ venv/
 .venv/
 *.sqlite3
 *.db
+
+# --- anadido para este proyecto ---
+# Secretos: solo se versiona el ejemplo
+*.pem
+*.key
+*.crt
+
+# Artefactos de compilacion
+# `dist/` se sigue versionando: es la salida de `npm run build` que usa
+# `npm start`.
+.vite/
+*.tsbuildinfo
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Logs y temporales
+logs/
+tmp/
+temp/
+
+# Backups
+*.bak
+*.backup
+*.old
+*.orig
+*.swp
+Thumbs.db

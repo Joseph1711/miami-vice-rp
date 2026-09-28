@@ -133,7 +133,8 @@ app.get("/api/bot/status", (req, res) => {
     "bot.cogs.tickets",
     "bot.cogs.verification",
     "bot.cogs.admin",
-    "bot.cogs.help"
+    "bot.cogs.help",
+    "bot.cogs.guia"
   ];
   res.json({
     status: isRunning ? "online" : "idle",

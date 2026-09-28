@@ -1,3 +1,5 @@
+import logging
+
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
@@ -9,13 +11,15 @@ from bot.helpers import (
     async_get_or_create_user,
     async_get_or_create_guild_config,
     format_currency,
-    generate_id,
     get_elapsed_seconds,
     check_admin_permission,
 )
 from bot.embeds import success_embed, error_embed, economy_embed, info_embed, warning_embed
 from bot.services.economy import async_add_cash, async_log_transaction, async_transfer, async_remove_cash
+from bot.services.business import pay_public_salary_from_treasury
 from bot.services.levels import add_xp
+
+logger = logging.getLogger("bot.economy")
 
 COOLDOWNS = {}
 
@@ -365,12 +369,16 @@ class Economy(commands.Cog):
             (user_id, guild_id), fetch="all"
         ) or []
 
-        # 2. Consultar empresas donde trabaja el usuario
+        # 2. Consultar empresas donde trabaja el usuario.
+        #    `payroll_mode='manual'` (empresas del modulo de negocios) NO pagan
+        #    solos: su dueno ejecuta la nomina desde `/empresa nomina` con la caja
+        #    real de la empresa. Aqui solo entran las heredadas 'automatic'.
         comp_rows = await aexecute(
             """SELECT cm.role, cm.salary, c.id as comp_id, c.name as company_name, c.funds
                FROM company_members cm
                JOIN companies c ON c.id = cm.company_id
-               WHERE cm.discord_id = $1 AND cm.guild_id = $2 AND cm.salary > 0""",
+               WHERE cm.discord_id = $1 AND cm.guild_id = $2 AND cm.salary > 0
+                 AND cm.member_status = 'active' AND c.payroll_mode = 'automatic'""",
             (user_id, guild_id), fetch="all"
         ) or []
 
@@ -433,7 +441,39 @@ class Economy(commands.Cog):
                     f"└ Cargo: `{c.get('role', 'Empleado')}` • ⚠️ **$0** *(Empresa en quiebra sin fondos)*"
                 )
 
-        # Si no tiene ningún salario formal en agencias ni empresas, otorgar subsidio básico de empleo ciudadano
+        # 3. Empleo público: lo liquida la Tesorería Municipal, no la empresa.
+        #    El pago es atomico y proporcional: si la Tesorería no alcanza, el
+        #    ciudadano cobra la parte proporcional y se le informa del resto.
+        public_pay = {"paid": 0, "lines": [], "short": 0, "treasury": 0}
+        if not interaction.user.guild_permissions.administrator:
+            try:
+                public_pay = await pay_public_salary_from_treasury(guild_id, user_id)
+            except Exception as public_error:
+                logger.warning("[Sueldo] No se pudo liquidar el empleo publico de %s: %s", user_id, public_error)
+                public_pay = {"paid": 0, "lines": [], "short": 0, "treasury": 0}
+        if public_pay.get("paid", 0) > 0:
+            total_salary += public_pay["paid"]
+            for line in public_pay.get("lines", []):
+                breakdown_items.append(
+                    f"\U0001F9FA **{line.get('job')}**\n"
+                    f"└ Empleo público • Salario: **{format_currency(line.get('amount'))}**"
+                    + (f" *(pendiente {format_currency(line.get('due') - line.get('amount'))})*"
+                       if line.get("due", 0) > line.get("amount", 0) else "")
+                )
+            breakdown_items.append(
+                f"\U0001F3E2 *Tesorería Municipal*\n"
+                f"└ Saldo tras la nómina: **{format_currency(public_pay.get('treasury', 0))}**"
+                + (f" ⚠️ *faltaron {format_currency(public_pay['short'])}*"
+                   if public_pay.get("short", 0) > 0 else "")
+            )
+        elif public_pay.get("lines"):
+            breakdown_items.append(
+                "\U0001F9FA **Empleo público**\n"
+                "└ ⚠️ **$0** *(la Tesorería Municipal está vacía: no hay sueldo que repartir)*"
+            )
+
+        # Si no tiene ningún salario formal en agencias, empresas o empleo público,
+        # otorgar subsidio básico de empleo ciudadano
         if total_salary <= 0:
             config = await async_get_or_create_guild_config(guild_id)
             base_subsidy = config.get("daily_amount", 500) or 500
@@ -453,7 +493,8 @@ class Economy(commands.Cog):
         # Registrar transacción
         await async_log_transaction(
             user_id, guild_id, "salary", total_salary,
-            f"Nómina salarial diaria: {len(dept_rows)} depts, {len(comp_rows)} comps"
+            f"Nómina salarial diaria: {len(dept_rows)} depts, {len(comp_rows)} comps, "
+            f"{public_pay.get('paid', 0)} de empleo público"
         )
 
         # Otorgar XP de jornada laboral
@@ -468,7 +509,7 @@ class Economy(commands.Cog):
         emb = economy_embed(f"💼 Nómina Salarial Cobrada • {interaction.user.display_name}")
         emb.set_thumbnail(url=interaction.user.display_avatar.url)
         emb.description = (
-            f"¡Tu sueldo diario ha sido liquidado y transferido exitosamente a tu **cuenta bancaria**!\n\n"
+            "¡Tu sueldo diario ha sido liquidado y transferido exitosamente a tu **cuenta bancaria**!\n\n"
             + "\n\n".join(breakdown_items)
         )
         emb.add_field(name="💵 Salario Neto Cobrado", value=f"**+{format_currency(total_salary)}**", inline=True)

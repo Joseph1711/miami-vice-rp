@@ -257,6 +257,7 @@ def api_bot_status():
         "bot.cogs.verification",
         "bot.cogs.admin",
         "bot.cogs.help",
+        "bot.cogs.guia",
     ]
     return jsonify({
         "status": "online" if ready else "idle",

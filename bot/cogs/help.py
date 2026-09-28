@@ -4,6 +4,21 @@ from discord.ext import commands
 
 from bot.embeds import info_embed
 
+EMBED_MAX_FIELDS = 25  # limite duro de Discord por embed
+
+
+def category_choices():
+    """Opciones de `/help categoria` derivadas de HELP_CATEGORIES.
+
+    Se generan aqui para que el menu y el comando de barra no se separen
+    nunca cuando se anade una categoria nueva.
+    """
+    return [
+        app_commands.Choice(name=f"{data['emoji']} {data['label']}"[:100], value=key)
+        for key, data in HELP_CATEGORIES.items()
+    ]
+
+
 HELP_CATEGORIES = {
     "economia": {
         "emoji": "💰",
@@ -130,14 +145,59 @@ HELP_CATEGORIES = {
         "emoji": "🏢",
         "label": "Empresas & Bienes Raíces",
         "commands": [
-            ("/empresa crear nombre [descripcion]", "Crear tu empresa"),
-            ("/empresa info nombre", "Ver info de empresa"),
-            ("/empresa contratar @usuario [salario]", "Contratar empleado"),
-            ("/empresa miembros", "Ver empleados"),
+            ("/empresa crear", "Fundar tu negocio: nombre, sector, ubicación e impuestos"),
+            ("/empresa mi_empresa", "Ver tu empresa sin escribir el nombre"),
+            ("/empresa panel", "Abrir el panel con botones de caja, nómina, menú y plantilla"),
+            ("/empresa info [nombre]", "Ver la ficha completa de una empresa"),
+            ("/empresa caja", "Ver la caja, las últimas nóminas y los últimos movimientos"),
+            ("/empresa nomina", "Pagar la nómina pendiente (o la parte que permita la caja)"),
+            ("/empresa menu [nombre]", "Ver el menú de productos y servicios con precios"),
+            ("/empresa plantilla puestos", "Ver los puestos que tú has definido"),
+            ("/empresa plantilla crear_puesto", "Crear o editar un puesto, su rol y su cupo"),
+            ("/empresa plantilla empleados", "Ver la plantilla de la empresa"),
+            ("/empresa plantilla contratar @usuario", "Contratar a un ciudadano en un puesto"),
+            ("/empresa plantilla despedir @usuario", "Dar de baja a un empleado y quitarle su rol"),
+            ("/empresa plantilla mis_datos", "Ver tu contrato: puesto, salario, permisos y deuda"),
+            ("/empresa dinero aportar cantidad", "Aportar capital propio a la caja"),
+            ("/empresa dinero invertir cantidad", "Invertir capital a cambio de acciones"),
+            ("/empresa dinero retirar cantidad", "Retirar dinero de la caja a tu cartera"),
+            ("/empresa dinero gasto concepto cantidad", "Registrar un gasto del negocio"),
+            ("/empresa dinero finanzas", "Ver el libro mayor de ingresos y gastos"),
+            ("/empresa dinero acumular_nomina", "Acumular la nómina pendiente sin pagarla"),
+            ("/empresa catalogo agregar_producto", "Añadir o editar un producto y su precio"),
+            ("/empresa catalogo agregar_servicio", "Añadir o editar un servicio y su precio"),
+            ("/empresa catalogo comprar", "Comprar un producto o contratar un servicio"),
+            ("/empresa sociedad acciones", "Ver el capital social y la accionistencia"),
+            ("/empresa sociedad emitir_acciones", "Emitir acciones; el importe entra en la caja"),
+            ("/empresa sociedad comprar_acciones [cantidad]", "Comprar acciones de la empresa"),
+            ("/empresa sociedad vender_acciones cantidad", "Vender tus acciones al capital social"),
+            ("/empresa sociedad dividendo cantidad", "Repartir dividendo entre los accionistas"),
+            ("/empresa negocio estado [nombre]", "Cambiar el estado: activa, en pausa, cerrada..."),
+            ("/empresa negocio vender_empresa precio", "Poner tu empresa en venta al precio que elijas"),
+            ("/empresa negocio retirar_venta", "Retirar tu empresa del mercado"),
+            ("/empresa negocio mercado", "Ver las empresas en venta y comprar una"),
+            ("/empresa negocio comprar_empresa", "Comprar una empresa en venta: paga el precio al vendedor"),
             ("/propiedad lista", "Ver propiedades disponibles"),
             ("/propiedad comprar id", "Comprar propiedad"),
             ("/propiedad rentar id", "Rentar una propiedad"),
             ("/propiedad mias", "Ver tus propiedades"),
+        ]
+    },
+    "empleos": {
+        "emoji": "🚕",
+        "label": "Empleos Públicos",
+        "commands": [
+            ("/empleos listar", "Ver los empleos públicos disponibles y sus sueldos"),
+            ("/empleos mios", "Ver tu empleo público y cuándo cobraste por última vez"),
+            ("/empleos entrar nombre", "Entrar en un empleo público por su nombre"),
+            ("/empleos renunciar", "Renunciar a tu empleo público y perder su rol"),
+            ("/empleos empleados nombre", "Ver quién ocupa un empleo público (Admin)"),
+            ("/empleos crear", "Publicar un empleo público con su sueldo y rol (Admin)"),
+            ("/empleos editar nombre", "Editar un empleo público ya publicado (Admin)"),
+            ("/empleos cerrar nombre", "Cerrar un empleo: deja de admitir candidatos (Admin)"),
+            ("/empleos reanudar nombre", "Reabrir un empleo público cerrado (Admin)"),
+            ("/empleos sueldo nombre cantidad", "Revisar el sueldo de un empleo y su plantilla (Admin)"),
+            ("/sueldo", "Cobrar tu sueldo: el empleo público se paga desde la Tesorería"),
         ]
     },
     "crimen": {
@@ -228,6 +288,7 @@ HELP_CATEGORIES = {
         "emoji": "⚙️",
         "label": "Administración del Servidor",
         "commands": [
+            ("/guia indice", "Manual completo de los comandos, de mayor a menor importancia"),
             ("/admin configuracion rol_admin @rol", "Configurar el rol exclusivo para usar comandos admin"),
             ("/admin configuracion canal_trabajos #canal", "Configurar canal para recibir reportes de /trabajar"),
             ("/admin configuracion canal_postulaciones #canal", "Configurar canal para recibir postulaciones de departamentos"),
@@ -276,12 +337,30 @@ class HelpCategorySelect(discord.ui.Select):
 
         e = info_embed(
             f"{cat_data['emoji']} Comandos — {cat_data['label']}",
-            f"Lista de comandos disponibles en esta sección:"
+            "Lista de comandos disponibles en esta sección"
         )
-        for cmd, desc in cat_data["commands"]:
-            e.add_field(name=f"`{cmd}`", value=desc, inline=False)
+        # Discord admite 25 campos por embed, asi que una categoria larga se
+        # corta en varias paginas en lugar de fallar al enviar.
+        for inicio in range(0, len(cat_data["commands"]), EMBED_MAX_FIELDS):
+            pagina = discord.Embed(
+                title=f"{cat_data['emoji']} Comandos — {cat_data['label']}",
+                description=("Lista de comandos disponibles en esta sección"
+                             if inicio == 0 else f"…continuación ({inicio + 1})"),
+                color=e.colour,
+            )
+            for cmd, desc in cat_data["commands"][inicio:inicio + EMBED_MAX_FIELDS]:
+                pagina.add_field(name=f"`{cmd}`", value=desc[:1024], inline=False)
+            total_paginas = -(-len(cat_data["commands"]) // EMBED_MAX_FIELDS)
+            pagina.set_footer(
+                text=f"Miami Vice RP Bot • Página {inicio // EMBED_MAX_FIELDS + 1}/{total_paginas}"
+                     " • Usa / para autocompletar")
+            if inicio == 0:
+                e = pagina
+            else:
+                await interaction.followup.send(embed=pagina, ephemeral=True)
 
-        e.set_footer(text="Miami Vice RP Bot • Usa / para autocompletar")
+        if len(cat_data["commands"]) <= EMBED_MAX_FIELDS:
+            e.set_footer(text="Miami Vice RP Bot • Usa / para autocompletar")
         await interaction.response.edit_message(embed=e)
 
 
@@ -297,31 +376,13 @@ class Help(commands.Cog):
 
     @app_commands.command(name="help", description="Centro de ayuda y lista interactiva de comandos del bot")
     @app_commands.describe(categoria="Categoría opcional a consultar")
-    @app_commands.choices(categoria=[
-        app_commands.Choice(name="💰 Economía & Trabajos", value="economia"),
-        app_commands.Choice(name="🪪 Documento de Identidad (DNI)", value="dni"),
-        app_commands.Choice(name="🔫 Registro Balístico de Armas", value="armas"),
-        app_commands.Choice(name="🚗 Vehículos, Trailers & ATVs", value="vehiculos"),
-        app_commands.Choice(name="🚨 B.O.L.O. (Búsqueda & Captura)", value="bolo"),
-        app_commands.Choice(name="📁 Casos & Expedientes", value="casos"),
-        app_commands.Choice(name="🚔 Central 911 & Incidentes", value="incidentes"),
-        app_commands.Choice(name="🖼️ Anuncios Embed", value="anuncios_embed"),
-        app_commands.Choice(name="🎮 Conexión a Roblox", value="roblox"),
-        app_commands.Choice(name="🏛️ Departamentos Oficiales", value="departamentos"),
-        app_commands.Choice(name="🏦 Banco & Inversiones", value="banco"),
-        app_commands.Choice(name="🛒 Tienda & Mercados", value="mercado"),
-        app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
-        app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
-        app_commands.Choice(name="🎫 Tickets & Soporte", value="tickets"),
-        app_commands.Choice(name="📢 Actualizaciones Bot", value="actualizaciones"),
-        app_commands.Choice(name="⚙️ Administración", value="admin"),
-    ])
+    @app_commands.choices(categoria=category_choices())
     async def help(self, interaction: discord.Interaction, categoria: str = None):
         if categoria and categoria in HELP_CATEGORIES:
             cat_data = HELP_CATEGORIES[categoria]
             e = info_embed(
                 f"{cat_data['emoji']} Comandos — {cat_data['label']}",
-                f"Lista de comandos disponibles:"
+                "Lista de comandos disponibles:"
             )
             for cmd, desc in cat_data["commands"]:
                 e.add_field(name=f"`{cmd}`", value=desc, inline=False)
@@ -347,25 +408,7 @@ class Help(commands.Cog):
 
     @app_commands.command(name="ayuda", description="Centro de ayuda y lista interactiva de comandos del bot (alias de /help)")
     @app_commands.describe(categoria="Categoría opcional a consultar")
-    @app_commands.choices(categoria=[
-        app_commands.Choice(name="💰 Economía & Trabajos", value="economia"),
-        app_commands.Choice(name="🪪 Documento de Identidad (DNI)", value="dni"),
-        app_commands.Choice(name="🔫 Registro Balístico de Armas", value="armas"),
-        app_commands.Choice(name="🚗 Vehículos, Trailers & ATVs", value="vehiculos"),
-        app_commands.Choice(name="🚨 B.O.L.O. (Búsqueda & Captura)", value="bolo"),
-        app_commands.Choice(name="📁 Casos & Expedientes", value="casos"),
-        app_commands.Choice(name="🚔 Central 911 & Incidentes", value="incidentes"),
-        app_commands.Choice(name="🖼️ Anuncios Embed", value="anuncios_embed"),
-        app_commands.Choice(name="🎮 Conexión a Roblox", value="roblox"),
-        app_commands.Choice(name="🏛️ Departamentos Oficiales", value="departamentos"),
-        app_commands.Choice(name="🏦 Banco & Inversiones", value="banco"),
-        app_commands.Choice(name="🛒 Tienda & Mercados", value="mercado"),
-        app_commands.Choice(name="🏢 Empresas & Propiedades", value="empresas_propiedades"),
-        app_commands.Choice(name="🕶️ Crimen & Bajos Fondos", value="crimen"),
-        app_commands.Choice(name="🎫 Tickets & Soporte", value="tickets"),
-        app_commands.Choice(name="📢 Actualizaciones Bot", value="actualizaciones"),
-        app_commands.Choice(name="⚙️ Administración", value="admin"),
-    ])
+    @app_commands.choices(categoria=category_choices())
     async def ayuda(self, interaction: discord.Interaction, categoria: str = None):
         await self.help(interaction, categoria)
 

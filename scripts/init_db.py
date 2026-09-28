@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS guild_config (
     admin_role_id TEXT,
     work_logs_channel_id TEXT,
     applications_channel_id TEXT,
+    single_public_job BOOLEAN DEFAULT TRUE,
+    public_jobs_channel_id TEXT,
+    company_creation_cost NUMERIC DEFAULT 5000,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -72,7 +75,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 );
 
 -- =====================
--- JOBS
+-- JOBS (EMPLEOS PÚBLICOS ADMINISTRADOS POR EL SERVIDOR)
 -- =====================
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
@@ -83,8 +86,31 @@ CREATE TABLE IF NOT EXISTS jobs (
     cooldown_minutes INTEGER DEFAULT 60,
     emoji TEXT DEFAULT '💼',
     is_active BOOLEAN DEFAULT TRUE,
+    role_id TEXT,
+    description TEXT DEFAULT '',
+    salary NUMERIC DEFAULT 0,
+    requirements TEXT DEFAULT '',
+    is_single BOOLEAN DEFAULT TRUE,
+    max_workers INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Asignacion activa de un ciudadano a un empleo publico.
+CREATE TABLE IF NOT EXISTS user_public_jobs (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    job_id TEXT NOT NULL,
+    job_name TEXT NOT NULL,
+    salary NUMERIC DEFAULT 0,
+    role_id TEXT,
+    status TEXT DEFAULT 'active',
+    hired_at TIMESTAMP DEFAULT NOW(),
+    last_paid_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(discord_id, guild_id, job_id)
 );
 
 -- =====================
@@ -291,7 +317,7 @@ CREATE TABLE IF NOT EXISTS fleet_vehicles (
 );
 
 -- =====================
--- COMPANIES
+-- COMPANIES (EMPRESAS PRIVADAS)
 -- =====================
 CREATE TABLE IF NOT EXISTS companies (
     id TEXT PRIMARY KEY,
@@ -301,6 +327,16 @@ CREATE TABLE IF NOT EXISTS companies (
     description TEXT DEFAULT '',
     funds NUMERIC DEFAULT 0,
     tax_rate NUMERIC DEFAULT 5,
+    category TEXT DEFAULT 'General',
+    location TEXT DEFAULT '',
+    emoji TEXT DEFAULT '🏢',
+    status TEXT DEFAULT 'active',
+    status_note TEXT DEFAULT '',
+    status_changed_at TIMESTAMP,
+    sale_price NUMERIC,
+    public_listing BOOLEAN DEFAULT FALSE,
+    payroll_mode TEXT DEFAULT 'automatic',
+    allow_multiple_jobs BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(guild_id, name)
@@ -314,7 +350,162 @@ CREATE TABLE IF NOT EXISTS company_members (
     role TEXT DEFAULT 'Empleado',
     salary NUMERIC DEFAULT 0,
     joined_at TIMESTAMP DEFAULT NOW(),
+    position_id TEXT,
+    member_status TEXT DEFAULT 'active',
+    permissions TEXT DEFAULT '',
+    discord_role_id TEXT,
+    pending_salary NUMERIC DEFAULT 0,
+    last_paid_at TIMESTAMP,
+    is_manager BOOLEAN DEFAULT FALSE,
+    hired_by TEXT,
+    notes TEXT DEFAULT '',
+    updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(company_id, discord_id)
+);
+
+-- Puestos de trabajo definidos por el propio dueno (sin lista fija).
+CREATE TABLE IF NOT EXISTS company_positions (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    salary NUMERIC DEFAULT 0,
+    description TEXT DEFAULT '',
+    discord_role_id TEXT,
+    permissions TEXT DEFAULT '',
+    max_members INTEGER DEFAULT 0,
+    sort_order INTEGER DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Catalogo comercial: productos (kind='product') y servicios (kind='service').
+CREATE TABLE IF NOT EXISTS company_catalog (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    kind TEXT DEFAULT 'product',
+    name TEXT NOT NULL,
+    description TEXT DEFAULT '',
+    price NUMERIC NOT NULL DEFAULT 0,
+    emoji TEXT DEFAULT '🍽️',
+    stock INTEGER DEFAULT -1,
+    role_id TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    sold_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(company_id, kind, name)
+);
+
+-- Libro mayor empresarial: cada movimiento con origen y saldo resultante.
+CREATE TABLE IF NOT EXISTS company_transactions (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    balance_after NUMERIC DEFAULT 0,
+    description TEXT DEFAULT '',
+    actor_id TEXT,
+    counterparty_id TEXT,
+    ref_id TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Acciones: configuracion de la sociedad por acciones.
+CREATE TABLE IF NOT EXISTS company_shares (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    total_shares INTEGER DEFAULT 0,
+    share_price NUMERIC DEFAULT 0,
+    control_pct NUMERIC DEFAULT 51,
+    is_enabled BOOLEAN DEFAULT FALSE,
+    buyback_price NUMERIC DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS company_shareholders (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    shares INTEGER DEFAULT 0,
+    total_invested NUMERIC DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(company_id, discord_id)
+);
+
+CREATE TABLE IF NOT EXISTS company_share_trades (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    trade_type TEXT DEFAULT 'buy',
+    shares INTEGER NOT NULL,
+    price NUMERIC NOT NULL,
+    total NUMERIC NOT NULL,
+    counterparty_id TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Anuncios de venta de empresa (y su posterior cierre).
+CREATE TABLE IF NOT EXISTS company_sales (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    seller_id TEXT NOT NULL,
+    buyer_id TEXT,
+    price NUMERIC NOT NULL DEFAULT 0,
+    status TEXT DEFAULT 'listed',
+    note TEXT DEFAULT '',
+    listed_at TIMESTAMP DEFAULT NOW(),
+    sold_at TIMESTAMP
+);
+
+-- Repartos de dividendos-approved por el dueno, pagados desde fondos reales.
+CREATE TABLE IF NOT EXISTS company_dividends (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    total_amount NUMERIC NOT NULL DEFAULT 0,
+    paid_amount NUMERIC DEFAULT 0,
+    recipient_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    note TEXT DEFAULT '',
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    paid_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS company_dividend_payments (
+    id TEXT PRIMARY KEY,
+    dividend_id TEXT NOT NULL REFERENCES company_dividends(id) ON DELETE CASCADE,
+    company_id TEXT NOT NULL,
+    guild_id TEXT NOT NULL,
+    discord_id TEXT NOT NULL,
+    shares INTEGER DEFAULT 0,
+    amount NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Liquidaciones de nomina ejecuta por el dueno.
+CREATE TABLE IF NOT EXISTS company_payroll_runs (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+    guild_id TEXT NOT NULL,
+    total NUMERIC DEFAULT 0,
+    employee_count INTEGER DEFAULT 0,
+    mode TEXT DEFAULT 'full',
+    status TEXT DEFAULT 'completed',
+    detail TEXT DEFAULT '',
+    created_by TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- =====================

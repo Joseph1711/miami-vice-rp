@@ -290,10 +290,368 @@ def _pg_migration_statements() -> list:
         )""",
         """CREATE TABLE IF NOT EXISTS server_vote_removals (
             id TEXT PRIMARY KEY,
-            vote_id TEXT NOT NULL REFERENCES server_votes(id) ON DELETE CASCADE,
+            vote_id TEXT NOT NULL,
             discord_id TEXT NOT NULL,
             removed_at TIMESTAMP DEFAULT NOW()
         )""",
+        # --- EMPLEOS PUBLICOS (tabla `jobs` heredada + asignaciones) ---
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS role_id TEXT",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary NUMERIC DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS requirements TEXT DEFAULT ''",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS is_single BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS max_workers INTEGER DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sort_order INTEGER DEFAULT 0",
+        "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General'",
+        """CREATE TABLE IF NOT EXISTS user_public_jobs (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            job_id TEXT NOT NULL,
+            job_name TEXT NOT NULL,
+            salary NUMERIC DEFAULT 0,
+            role_id TEXT,
+            status TEXT DEFAULT 'active',
+            hired_at TIMESTAMP DEFAULT NOW(),
+            last_paid_at TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(discord_id, guild_id, job_id)
+        )""",
+        "ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS single_public_job BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS public_jobs_channel_id TEXT",
+        "ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS company_creation_cost NUMERIC DEFAULT 5000",
+        # --- EMPRESAS PRIVADAS: columnas nuevas sobre `companies` ---
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS location TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS emoji TEXT DEFAULT '🏢'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS status_note TEXT DEFAULT ''",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS status_changed_at TIMESTAMP",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS sale_price NUMERIC",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS public_listing BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS payroll_mode TEXT DEFAULT 'automatic'",
+        "ALTER TABLE companies ADD COLUMN IF NOT EXISTS allow_multiple_jobs BOOLEAN DEFAULT TRUE",
+        # `company_members` conserva las columnas heredadas (role/salary) que leen
+        # /sueldo y el cron; aqui se anaden las del nuevo sistema.
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS position_id TEXT",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS member_status TEXT DEFAULT 'active'",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS permissions TEXT DEFAULT ''",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS discord_role_id TEXT",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS pending_salary NUMERIC DEFAULT 0",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS last_paid_at TIMESTAMP",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS is_manager BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS hired_by TEXT",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS notes TEXT DEFAULT ''",
+        "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        """CREATE TABLE IF NOT EXISTS company_positions (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            salary NUMERIC DEFAULT 0,
+            description TEXT DEFAULT '',
+            discord_role_id TEXT,
+            permissions TEXT DEFAULT '',
+            max_members INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_catalog (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            kind TEXT DEFAULT 'product',
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            price NUMERIC NOT NULL DEFAULT 0,
+            emoji TEXT DEFAULT '🍽️',
+            stock INTEGER DEFAULT -1,
+            role_id TEXT,
+            is_active BOOLEAN DEFAULT TRUE,
+            sold_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, kind, name)
+        )""",
+        "ALTER TABLE company_catalog ADD COLUMN IF NOT EXISTS role_id TEXT",
+        """CREATE TABLE IF NOT EXISTS company_transactions (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL,
+            amount NUMERIC NOT NULL,
+            balance_after NUMERIC DEFAULT 0,
+            description TEXT DEFAULT '',
+            actor_id TEXT,
+            counterparty_id TEXT,
+            ref_id TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_shares (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total_shares INTEGER DEFAULT 0,
+            share_price NUMERIC DEFAULT 0,
+            control_pct NUMERIC DEFAULT 51,
+            is_enabled BOOLEAN DEFAULT FALSE,
+            buyback_price NUMERIC DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_shareholders (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            shares INTEGER DEFAULT 0,
+            total_invested NUMERIC DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(company_id, discord_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_share_trades (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            trade_type TEXT DEFAULT 'buy',
+            shares INTEGER NOT NULL,
+            price NUMERIC NOT NULL,
+            total NUMERIC NOT NULL,
+            counterparty_id TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_sales (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            seller_id TEXT NOT NULL,
+            buyer_id TEXT,
+            price NUMERIC NOT NULL DEFAULT 0,
+            status TEXT DEFAULT 'listed',
+            note TEXT DEFAULT '',
+            listed_at TIMESTAMP DEFAULT NOW(),
+            sold_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_dividends (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total_amount NUMERIC NOT NULL DEFAULT 0,
+            paid_amount NUMERIC DEFAULT 0,
+            recipient_count INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            note TEXT DEFAULT '',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW(),
+            paid_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_dividend_payments (
+            id TEXT PRIMARY KEY,
+            dividend_id TEXT NOT NULL REFERENCES company_dividends(id) ON DELETE CASCADE,
+            company_id TEXT NOT NULL,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            shares INTEGER DEFAULT 0,
+            amount NUMERIC DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_payroll_runs (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total NUMERIC DEFAULT 0,
+            employee_count INTEGER DEFAULT 0,
+            mode TEXT DEFAULT 'full',
+            status TEXT DEFAULT 'completed',
+            detail TEXT DEFAULT '',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        )""",
+        # Indices del modulo empresarial: el historial y el catalogo se leen mucho.
+        "CREATE INDEX IF NOT EXISTS idx_company_tx_company ON company_transactions(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_company_catalog_company ON company_catalog(company_id, kind)",
+        "CREATE INDEX IF NOT EXISTS idx_public_jobs_user ON user_public_jobs(discord_id, guild_id)",
+        "CREATE INDEX IF NOT EXISTS idx_company_members_user ON company_members(discord_id, guild_id)",
+    ]
+
+
+
+def _sqlite_add_missing_columns(conn, table: str, columns) -> None:
+    """ALTER TABLE ... ADD COLUMN solo para las columnas que falten.
+
+    Si la tabla no existe todavia (base recien creada que aun no paso por
+    `scripts.init_db`), no hay nada que hacer: el CREATE TABLE ya la define
+    completa.
+    """
+    try:
+        cursor = conn.execute(f"PRAGMA table_info({table})")
+        existing = {row[1] for row in cursor.fetchall()}
+    except Exception:
+        return
+    if not existing:
+        return
+    for column, column_type in columns:
+        if column in existing:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+        except Exception as column_error:
+            logger.debug("[DB] Columna %s.%s omitida: %s", table, column, column_error)
+
+
+def _sqlite_business_ddl() -> list:
+    """DDL SQLite del modulo de empleos publicos y empresas privadas."""
+    return [
+        """CREATE TABLE IF NOT EXISTS user_public_jobs (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            job_id TEXT NOT NULL,
+            job_name TEXT NOT NULL,
+            salary NUMERIC DEFAULT 0,
+            role_id TEXT,
+            status TEXT DEFAULT 'active',
+            hired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_paid_at TIMESTAMP,
+            updated_at TIMESTAMP,
+            UNIQUE(discord_id, guild_id, job_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_positions (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            salary NUMERIC DEFAULT 0,
+            description TEXT DEFAULT '',
+            discord_role_id TEXT,
+            permissions TEXT DEFAULT '',
+            max_members INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_catalog (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            kind TEXT DEFAULT 'product',
+            name TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            price NUMERIC NOT NULL DEFAULT 0,
+            emoji TEXT DEFAULT '🍽️',
+            stock INTEGER DEFAULT -1,
+            role_id TEXT,
+            is_active BOOLEAN DEFAULT 1,
+            sold_count INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_transactions (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            kind TEXT NOT NULL,
+            amount NUMERIC NOT NULL,
+            balance_after NUMERIC DEFAULT 0,
+            description TEXT DEFAULT '',
+            actor_id TEXT,
+            counterparty_id TEXT,
+            ref_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_shares (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total_shares INTEGER DEFAULT 0,
+            share_price NUMERIC DEFAULT 0,
+            control_pct NUMERIC DEFAULT 51,
+            is_enabled BOOLEAN DEFAULT 0,
+            buyback_price NUMERIC DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_shareholders (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            shares INTEGER DEFAULT 0,
+            total_invested NUMERIC DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP,
+            UNIQUE(company_id, discord_id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_share_trades (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            trade_type TEXT DEFAULT 'buy',
+            shares INTEGER NOT NULL,
+            price NUMERIC NOT NULL,
+            total NUMERIC NOT NULL,
+            counterparty_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_sales (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            seller_id TEXT NOT NULL,
+            buyer_id TEXT,
+            price NUMERIC NOT NULL DEFAULT 0,
+            status TEXT DEFAULT 'listed',
+            note TEXT DEFAULT '',
+            listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            sold_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_dividends (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total_amount NUMERIC NOT NULL DEFAULT 0,
+            paid_amount NUMERIC DEFAULT 0,
+            recipient_count INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            note TEXT DEFAULT '',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            paid_at TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_dividend_payments (
+            id TEXT PRIMARY KEY,
+            dividend_id TEXT NOT NULL REFERENCES company_dividends(id) ON DELETE CASCADE,
+            company_id TEXT NOT NULL,
+            guild_id TEXT NOT NULL,
+            discord_id TEXT NOT NULL,
+            shares INTEGER DEFAULT 0,
+            amount NUMERIC DEFAULT 0,
+            status TEXT DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        """CREATE TABLE IF NOT EXISTS company_payroll_runs (
+            id TEXT PRIMARY KEY,
+            company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+            guild_id TEXT NOT NULL,
+            total NUMERIC DEFAULT 0,
+            employee_count INTEGER DEFAULT 0,
+            mode TEXT DEFAULT 'full',
+            status TEXT DEFAULT 'completed',
+            detail TEXT DEFAULT '',
+            created_by TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_company_tx_company ON company_transactions(company_id, created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_company_catalog_company ON company_catalog(company_id, kind)",
+        "CREATE INDEX IF NOT EXISTS idx_public_jobs_user ON user_public_jobs(discord_id, guild_id)",
+        "CREATE INDEX IF NOT EXISTS idx_company_members_user ON company_members(discord_id, guild_id)",
     ]
 
 
@@ -364,6 +722,64 @@ def _ensure_schema_migrations(conn):
             existing_cm = {row[1] for row in cursor_cm.fetchall()}
             if "username" not in existing_cm and len(existing_cm) > 0:
                 conn.execute("ALTER TABLE company_members ADD COLUMN username TEXT")
+
+            _sqlite_add_missing_columns(
+                conn,
+                "jobs",
+                [
+                    ("role_id", "TEXT"),
+                    ("description", "TEXT DEFAULT ''"),
+                    ("salary", "NUMERIC DEFAULT 0"),
+                    ("requirements", "TEXT DEFAULT ''"),
+                    ("is_single", "BOOLEAN DEFAULT 1"),
+                    ("max_workers", "INTEGER DEFAULT 0"),
+                    ("sort_order", "INTEGER DEFAULT 0"),
+                    ("category", "TEXT DEFAULT 'General'"),
+                ],
+            )
+            _sqlite_add_missing_columns(
+                conn,
+                "guild_config",
+                [
+                    ("single_public_job", "BOOLEAN DEFAULT 1"),
+                    ("public_jobs_channel_id", "TEXT"),
+                    ("company_creation_cost", "NUMERIC DEFAULT 5000"),
+                ],
+            )
+            _sqlite_add_missing_columns(
+                conn,
+                "companies",
+                [
+                    ("category", "TEXT DEFAULT 'General'"),
+                    ("location", "TEXT DEFAULT ''"),
+                    ("emoji", "TEXT DEFAULT '🏢'"),
+                    ("status", "TEXT DEFAULT 'active'"),
+                    ("status_note", "TEXT DEFAULT ''"),
+                    ("status_changed_at", "TIMESTAMP"),
+                    ("sale_price", "NUMERIC"),
+                    ("public_listing", "BOOLEAN DEFAULT 0"),
+                    ("payroll_mode", "TEXT DEFAULT 'automatic'"),
+                    ("allow_multiple_jobs", "BOOLEAN DEFAULT 1"),
+                ],
+            )
+            _sqlite_add_missing_columns(
+                conn,
+                "company_members",
+                [
+                    ("position_id", "TEXT"),
+                    ("member_status", "TEXT DEFAULT 'active'"),
+                    ("permissions", "TEXT DEFAULT ''"),
+                    ("discord_role_id", "TEXT"),
+                    ("pending_salary", "NUMERIC DEFAULT 0"),
+                    ("last_paid_at", "TIMESTAMP"),
+                    ("is_manager", "BOOLEAN DEFAULT 0"),
+                    ("hired_by", "TEXT"),
+                    ("notes", "TEXT DEFAULT ''"),
+                    ("updated_at", "TIMESTAMP"),
+                ],
+            )
+            for ddl in _sqlite_business_ddl():
+                conn.execute(ddl)
 
             # auctions check
             cursor_auc = conn.execute("PRAGMA table_info(auctions)")
@@ -936,6 +1352,107 @@ def execute_many(queries):
                 continue
             logger.error("[DB] Error en execute_many: %s", error)
             raise
+
+
+def _run_transaction(queries) -> list:
+    """Ejecuta una lista de sentencias DDL/DML como UNA sola transaccion.
+
+    Es la base del modulo empresarial: cualquier movimiento de dinero (compra,
+    nomina, venta de empresa, acciones) se aplica completa o no se aplica. Si una
+    sentencia falla a mitad, nada queda escrito y el balance no se descuadra.
+
+    `queries` es una lista de tuplas (query, params). Devuelve los resultados de
+    las sentencias que pidieron `fetch` (tuplas de 3 elementos: q, params, fetch).
+    """
+    if not queries:
+        return []
+
+    if USE_POSTGRES:
+        with _pg_connection() as conn:
+            results = []
+            try:
+                for item in queries:
+                    query, params = item[0], item[1]
+                    fetch = item[2] if len(item) > 2 else None
+                    raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=False)
+                    with conn.cursor() as cursor:
+                        cursor.execute(raw, safe_params or ())
+                        if fetch:
+                            results.append(_fetch_result(cursor, fetch))
+                conn.commit()
+                return results
+            except BaseException:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                raise
+
+    conn = _connect_sqlite()
+    results = []
+    try:
+        # isolation_level=None deja la conexion en autocommit: sin BEGIN explicito
+        # cada sentencia se confirmaria por separado y no habria atomicidad.
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            for item in queries:
+                query, params = item[0], item[1]
+                fetch = item[2] if len(item) > 2 else None
+                raw, safe_params = _prepare_query_and_params(query, params, is_sqlite=True)
+                cursor = conn.execute(raw, safe_params or ())
+                if fetch:
+                    results.append(_fetch_result(cursor, fetch))
+            conn.execute("COMMIT")
+            return results
+        except BaseException:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception:
+                pass
+            raise
+    finally:
+        conn.close()
+
+
+def execute_atomic(queries):
+    """Version sincrona de `_run_transaction`."""
+    _ensure_migrations_done()
+    started = time.monotonic()
+    attempt = 1
+    while True:
+        try:
+            results = _run_transaction(queries)
+            elapsed_ms = (time.monotonic() - started) * 1000
+            if elapsed_ms > SLOW_QUERY_MS:
+                logger.warning("[DB][SLOW TX %.0fms] %d queries", elapsed_ms, len(queries))
+            return results
+        except Exception as error:
+            backoff = DB_RETRY_BACKOFF_SECONDS * attempt
+            # Una transacion revertida NO se reintenta a ciegas: el servidor ya
+            # garantiza que nada quedo escrito y el error suele ser de logica
+            # (saldo insuficiente, clave duplicada), no transitorio.
+            if _can_retry(error, None, attempt, started, backoff):
+                attempt += 1
+                logger.warning(
+                    "[DB] Reintento %d/%d en transaccion (%s)",
+                    attempt,
+                    DB_RETRY_ATTEMPTS,
+                    error,
+                )
+                if backoff:
+                    time.sleep(backoff)
+                continue
+            logger.error(
+                "[DB] Error en transaccion: %s | Queries: %d",
+                error,
+                len(queries),
+            )
+            raise
+
+
+async def aexecute_atomic(queries):
+    """Version asincrona de `execute_atomic` (el camino de los comandos slash)."""
+    return await _run_db_operation(execute_atomic, queries)
 
 
 def initialize_schema(schema: str):

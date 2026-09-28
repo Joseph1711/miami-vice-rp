@@ -1,6 +1,5 @@
 from bot.db import execute, aexecute
 from bot.helpers import generate_id
-import datetime
 
 TRANSACTION_TYPES = [
     "daily","weekly","work","pay","transfer","deposit","withdraw",
@@ -8,7 +7,12 @@ TRANSACTION_TYPES = [
     "savings_interest","marketplace_sale","marketplace_purchase",
     "auction_win","auction_sale","shop_purchase","blackmarket_purchase",
     "property_purchase","property_sale","property_rent",
-    "company_deposit","company_salary","department_salary",
+    # --- Sistema de empresas (/empresa) y empleos publicos (/empleos) ---
+    "company_fee","company_deposit","company_investment","company_withdrawal",
+    "company_expense","company_salary","company_dividend","company_shares",
+    "company_purchase","company_sale_income","company_buy",
+    "public_job_salary",
+    "department_salary",
     "admin_give","donation","money_laundering","drug_sale",
     "contract_reward","treasury_grant","repair_cost"
 ]
