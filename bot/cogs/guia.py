@@ -156,13 +156,16 @@ SECCIONES = [
                    "de modo que sin fondos en `/tesoro` el ciudadano cobra cero.",
         "comandos": [
             ("/empleos listar", "Muestra los empleos publicos abiertos, su sueldo y sus plazas "
-                                "libres.", "Ciudadanos"),
+                                "libres. El tablón es visible para todo el servidor.", "Ciudadanos"),
             ("/empleos entrar", "Entra en un empleo publico por su nombre y recibes su rol de "
                                 "Discord. Si el servidor permite un solo empleo, el anterior se "
                                 "cierra y su rol se retira.", "Ciudadanos"),
             ("/empleos mios", "Tu empleo publico vigente y la fecha de tu ultimo cobro.",
              "Ciudadanos"),
             ("/empleos renunciar", "Deja el empleo y pierde su rol de Discord.", "Ciudadanos"),
+            ("/empleos predeterminados", "Publica el catalogo oficial de 10 empleos que falten. "
+                                         "No duplica ni pisa los que ya hayas configurado.",
+             "Admin"),
             ("/empleos crear", "Publica un empleo publico con nombre, sueldo diario, descripcion, "
                                "rol y maximo de plazas. El emoji se deduce del nombre.", "Admin"),
             ("/empleos editar", "Edita un empleo ya publicado. El sueldo nuevo se aplica a la "
@@ -254,9 +257,13 @@ SECCIONES = [
             ("/empresa negocio retirar_venta", "Saca tu empresa del mercado.", "Dueno"),
             ("/empresa negocio mercado", "Listado de empresas en venta con su precio y su caja.",
              "Ciudadanos"),
-            ("/empresa negocio comprar_empresa", "Compra una empresa en venta. El precio va al "
-                                                 "vendedor y la caja heredada se queda en el "
-                                                 "negocio.", "Ciudadanos"),
+            ("/empresa negocio predeterminadas", "Publica el catalogo oficial de 13 empresas "
+                                                 "privadas en venta. El precio lo paga el "
+                                                 "comprador y entra en las arcas municipales. No "
+                                                 "duplica ni toca las ya vendidas.", "Admin"),
+            ("/empresa negocio comprar_empresa", "Compra una empresa en venta. En las empresas de "
+                                                 "la ciudad el precio va a las arcas; en las de "
+                                                 "un ciudadano, al vendedor.", "Ciudadanos"),
         ],
     },
     {

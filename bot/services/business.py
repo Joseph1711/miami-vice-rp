@@ -24,6 +24,7 @@ import logging
 
 from bot.db import aexecute, aexecute_atomic
 from bot.helpers import generate_id, async_get_or_create_user, async_get_or_create_guild_config
+from bot.services.catalogs import CITY_OWNER_ID, DEFAULT_JOBS, CITY_COMPANIES
 
 logger = logging.getLogger("bot.business")
 
@@ -470,6 +471,22 @@ def _bank_credit(user_id: str, guild_id: str, amount: int):
     return (
         "UPDATE users SET bank=bank+$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3",
         (amount, user_id, guild_id),
+        "count",
+    )
+
+
+def _treasury_credit(guild_id: str, amount: int):
+    """Suma un importe a la Tesoreria Municipal creando la fila si no existe.
+
+    Es la contraparte real cuando no hay un ciudadano al que pagar: el dinero
+    sale del bolsillo del comprador y entra en las arcas del servidor, sin
+    desaparecer ni multiplicarse.
+    """
+    return (
+        """INSERT INTO treasury (id, guild_id, balance, created_at, updated_at)
+           VALUES ($1,$2,$3,NOW(),NOW())
+           ON CONFLICT (guild_id) DO UPDATE SET balance=treasury.balance+$3, updated_at=NOW()""",
+        (generate_id(), guild_id, amount),
         "count",
     )
 
@@ -1262,6 +1279,11 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
     comprador -precio | vendedor +precio | empresa entra el importe en su caja.
     Los empleados, el menu, los puestos y la configuracion se conservan; solo
     cambia la propiedad.
+
+    Excepcion documentada: si el vendedor es la ciudad (empresas sembradas por
+    administracion), no existe un ciudadano al que pagar. El importe va a la
+    Tesoreria Municipal y NO entra en la caja del negocio, porque la ciudad no
+    venda un negocio con capital propio: se limita a entregar la propiedad.
     """
     company = await aexecute(
         """SELECT c.*, s.id AS sale_id, s.price AS asking_price
@@ -1274,7 +1296,8 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
     if not company:
         raise BusinessError("Esa empresa ya no esta en venta.")
     seller_id = str(company.get("owner_id"))
-    if seller_id == str(buyer_id):
+    is_city_sale = seller_id == CITY_OWNER_ID
+    if not is_city_sale and seller_id == str(buyer_id):
         raise BusinessError("No puedes comprar tu propia empresa.")
     if (company.get("status") or "active") in BLOCKED_STATUSES:
         raise BusinessError("Esa empresa no admite compra en su estado actual.")
@@ -1284,14 +1307,21 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
         raise BusinessError("El anuncio de venta no tiene un precio valido.")
 
     await async_get_or_create_user(buyer_id, guild_id)
-    await async_get_or_create_user(seller_id, guild_id)
+    if not is_city_sale:
+        await async_get_or_create_user(seller_id, guild_id)
     funds = money(company.get("funds"))
     now = datetime.datetime.utcnow()
     buyer_already = await get_member(company_id, buyer_id)
 
     batch = [
         _cash_guard(buyer_id, guild_id, price, -1),
-        _cash_guard(seller_id, guild_id, price, +1),
+    ]
+    if is_city_sale:
+        # El precio de una empresa de la ciudad es ingreso municipal.
+        batch.append(_treasury_credit(guild_id, price))
+    else:
+        batch.append(_cash_guard(seller_id, guild_id, price, +1))
+    batch += [
         (
             """UPDATE companies SET owner_id=$1, status='active', sale_price=NULL,
                public_listing=FALSE, status_note='', status_changed_at=NOW(), updated_at=NOW()
@@ -1300,10 +1330,11 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
             "count",
         ),
         # El importe de la venta pertenece al negocio: entra en su caja, no se
-        # queda en el bolsillo del comprador.
+        # queda en el bolsillo del comprador. En una venta de la ciudad el
+        # dinero va a las arcas, asi que la caja se hereda tal cual.
         (
             "UPDATE companies SET funds=funds+$1, updated_at=NOW() WHERE id=$2",
-            (price, company_id),
+            (0 if is_city_sale else price, company_id),
             "count",
         ),
         (
@@ -1312,25 +1343,26 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
             (buyer_id, company["sale_id"]),
             "count",
         ),
+    ]
+    if not is_city_sale:
         # El dueno anterior deja de ser miembro de su propia empresa.
-        (
+        batch.append((
             "UPDATE company_members SET member_status='left', role='Ex-Propietario',"
             " discord_role_id=NULL, position_id=NULL, pending_salary=0, updated_at=NOW()"
             " WHERE company_id=$1 AND discord_id=$2",
             (company_id, seller_id),
             "count",
-        ),
-        # El comprador pasa a ser dueno: se reutiliza su ficha si ya trabajaba
-        # aqui, y se crea si nunca estuvo en la plantilla.
-        (
-            """UPDATE company_members SET role='Propietario', salary=0, position_id=NULL,
-               member_status='active', permissions='', discord_role_id=NULL, pending_salary=0,
-               is_manager=FALSE, hired_by=$1, updated_at=NOW()
-               WHERE company_id=$2 AND discord_id=$1""",
-            (buyer_id, company_id),
-            "count",
-        ),
-    ]
+        ))
+    # El comprador pasa a ser dueno: se reutiliza su ficha si ya trabajaba
+    # aqui, y se crea si nunca estuvo en la plantilla.
+    batch.append((
+        """UPDATE company_members SET role='Propietario', salary=0, position_id=NULL,
+           member_status='active', permissions='', discord_role_id=NULL, pending_salary=0,
+           is_manager=FALSE, hired_by=$1, updated_at=NOW()
+           WHERE company_id=$2 AND discord_id=$1""",
+        (buyer_id, company_id),
+        "count",
+    ))
     if not buyer_already:
         batch.append((
             """INSERT INTO company_members
@@ -1340,15 +1372,20 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
             (generate_id(), company_id, buyer_id, guild_id, now),
             "count",
         ))
-    batch += [
-        _user_tx(buyer_id, guild_id, TX["company_buy"], -price,
-                 f"Compra de la empresa {company['name']} a {seller_id}"),
-        _user_tx(seller_id, guild_id, TX["company_sale_income"], price,
-                 f"Venta de la empresa {company['name']} a {buyer_id}"),
-        _ledger_tx(company, "company_sale", price, funds + price,
-                   f"Venta de la empresa por {price:,} — nuevo dueno {buyer_id}",
-                   buyer_id, seller_id),
-    ]
+    batch.append(_user_tx(buyer_id, guild_id, TX["company_buy"], -price,
+                          f"Compra de la empresa {company['name']}"
+                          + ("" if is_city_sale else f" a {seller_id}")))
+    if not is_city_sale:
+        batch.append(_user_tx(seller_id, guild_id, TX["company_sale_income"], price,
+                              f"Venta de la empresa {company['name']} a {buyer_id}"))
+    batch.append(_ledger_tx(
+        company, "company_sale",
+        0 if is_city_sale else price,
+        funds if is_city_sale else funds + price,
+        (f"Venta de una empresa de la ciudad por {price:,} — el importe va a la Tesoreria"
+         if is_city_sale else f"Venta de la empresa por {price:,}") + f" — nuevo dueno {buyer_id}",
+        buyer_id, None if is_city_sale else seller_id,
+    ))
     results = await aexecute_atomic(batch)
     if not results[0]:
         raise InsufficientFunds(
@@ -1358,8 +1395,9 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
     return {
         "price": price,
         "seller_id": seller_id,
+        "is_city_sale": is_city_sale,
         "company": company,
-        "company_balance": funds + price,
+        "company_balance": funds if is_city_sale else funds + price,
     }
 
 
@@ -2068,3 +2106,125 @@ async def pay_public_salary_from_treasury(guild_id: str, user_id: str):
         "short": max(0, total - payable),
         "treasury": balance - payable,
     }
+
+
+# ---------------------------------------------------------------------------
+# CATALOGOS PREDETERMINADOS (siembra por administracion)
+# ---------------------------------------------------------------------------
+
+
+async def seed_default_jobs(guild_id: str):
+    """Publica los empleos del catalogo oficial que falten en el servidor.
+
+    Idempotente: solo inserta los que no existen (comparacion sin distinguir
+    mayusculas, igual que al crear a mano). Los que ya estan no se tocan, de
+    forma que un sueldo o una descripcion editados por el admin se respetan.
+    """
+    created, existing = [], []
+    for job in DEFAULT_JOBS:
+        name = job["name"]
+        found = await aexecute(
+            "SELECT id FROM jobs WHERE guild_id=$1 AND name ILIKE $2",
+            (guild_id, name),
+            fetch="one",
+        )
+        if found:
+            existing.append(name)
+            continue
+        job_id = generate_id()
+        try:
+            await aexecute(
+                """INSERT INTO jobs
+                     (id, guild_id, name, salary, description, role_id, emoji, is_active,
+                      is_single, max_workers, sort_order, created_at, updated_at)
+                   VALUES ($1,$2,$3,$4,$5,NULL,$6,TRUE,TRUE,$7,$8,NOW(),NOW())""",
+                (job_id, guild_id, name, money(job["salary"]), job.get("description", ""),
+                 job.get("emoji", "\U0001F9FA"), max(0, int(job.get("max_workers") or 0)),
+                 len(DEFAULT_JOBS)),
+            )
+        except Exception as error:
+            # Carrera con otra siembra simultanea: la fila ya existe y se trata
+            # como "ya estaba", nunca como fallo del comando.
+            logger.warning("[Empleos] No se pudo sembrar '%s': %s", name, error)
+            existing.append(name)
+            continue
+        created.append(name)
+    return {"created": created, "existing": existing}
+
+
+async def seed_city_companies(guild_id: str):
+    """Pone a la venta las empresas privadas del catalogo oficial de la ciudad.
+
+    Idempotente y no destructiva:
+
+    * si el nombre ya existe en el servidor, no se toca la empresa;
+    * si la ciudad sigue siendo la duena y no esta en venta, se vuelve a
+      anunciar con su precio de catalogo (por ejemplo tras un reinicio);
+    * si ya fue vendida a un ciudadano, se respeta al nuevo dueno.
+
+    Las empresas se crean con caja a cero y sin plantilla: la ciudad entrega
+    el negocio, no capital ni empleados.
+    """
+    listed, already, sold, failed = [], [], [], []
+    for item in CITY_COMPANIES:
+        name = item["name"]
+        price = money(item.get("price"))
+        if price <= 0:
+            failed.append(name)
+            continue
+        company = await aexecute(
+            "SELECT id, owner_id, status FROM companies WHERE guild_id=$1 AND name ILIKE $2",
+            (guild_id, name),
+            fetch="one",
+        )
+        if company:
+            if str(company.get("owner_id")) != CITY_OWNER_ID:
+                sold.append(name)
+                continue
+            company_id = company["id"]
+            sale = await aexecute(
+                "SELECT id FROM company_sales WHERE company_id=$1 AND status='listed'",
+                (company_id,),
+                fetch="one",
+            )
+            if sale:
+                already.append(name)
+                continue
+            # Era de la ciudad pero se quedo sin anuncio: se vuelve a vender.
+            await aexecute(
+                """UPDATE companies SET status='for_sale', sale_price=$1, public_listing=TRUE,
+                   status_note='En venta', status_changed_at=NOW(), updated_at=NOW() WHERE id=$2""",
+                (price, company_id),
+            )
+        else:
+            company_id = generate_id()
+            try:
+                await aexecute(
+                    """INSERT INTO companies
+                         (id, guild_id, owner_id, name, description, funds, tax_rate, category,
+                          location, emoji, status, status_note, status_changed_at, public_listing,
+                          payroll_mode, allow_multiple_jobs, sale_price, created_at, updated_at)
+                       VALUES ($1,$2,$3,$4,$5,0,5,$6,$7,$8,'for_sale','En venta',NOW(),TRUE,
+                               'manual',TRUE,$9,NOW(),NOW())""",
+                    (company_id, guild_id, CITY_OWNER_ID, name, item.get("description", ""),
+                     item.get("category", "General"), item.get("location", ""),
+                     item.get("emoji", "\U0001F3E2"), price),
+                )
+            except Exception as error:
+                logger.warning("[Empresas] No se pudo sembrar '%s': %s", name, error)
+                failed.append(name)
+                continue
+        try:
+            await aexecute(
+                """INSERT INTO company_sales
+                     (id, company_id, guild_id, seller_id, price, status, note, listed_at)
+                   VALUES ($1,$2,$3,$4,$5,'listed',$6,NOW())""",
+                (generate_id(), company_id, guild_id, CITY_OWNER_ID, price,
+                 "Propiedad de la ciudad"),
+            )
+        except Exception as error:
+            logger.warning("[Empresas] No se pudo anunciar '%s': %s", name, error)
+            failed.append(name)
+            continue
+        listed.append(name)
+    return {"listed": listed, "already": already, "sold": sold, "failed": failed}

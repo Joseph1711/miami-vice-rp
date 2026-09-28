@@ -26,7 +26,8 @@ from discord.ext import commands
 
 from bot.db import aexecute
 from bot.embeds import error_embed, info_embed, success_embed, warning_embed
-from bot.helpers import async_get_or_create_guild_config, async_get_or_create_user
+from bot.helpers import (async_get_or_create_guild_config, async_get_or_create_user,
+                         check_admin_permission)
 from bot.services import business as B
 from bot.services import business_ui as UI
 
@@ -483,10 +484,14 @@ class MarketBuyView(discord.ui.View):
             return
         embed = success_embed(
             f"\U0001F3E2 Eres el nuevo dueño de {result['company'].get('name')}",
-            f"Has pagado **{UI.money(result['price'])}** a <@{result['seller_id']}>.",
+            f"Has pagado **{UI.money(result['price'])}** a "
+            + ("**las arcas municipales**." if result.get("is_city_sale")
+               else f"<@{result['seller_id']}>."),
         )
         embed.add_field(name="Caja heredada", value=UI.money(result["company_balance"]), inline=True)
-        embed.set_footer(text="El importe entró en la caja del negocio, no a tu bolsillo")
+        embed.set_footer(text=("El importe entró en las arcas municipales, no a tu bolsillo"
+                               if result.get("is_city_sale")
+                               else "El importe entró en la caja del negocio, no a tu bolsillo"))
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 
@@ -1061,12 +1066,17 @@ class Companies(commands.Cog):
             await interaction.followup.send(
                 embed=info_embed("Mercado vacío", "No hay empresas en venta ahora mismo."))
             return
-        embed = info_embed("\U0001F3E2 Empresas en venta", "El importe pagado entra en la caja del negocio.")
+        embed = info_embed("\U0001F3E2 Empresas en venta",
+                           "El importe va al vendedor. En las empresas de la ciudad, a las arcas.")
         for listing in listings[:10]:
+            if str(listing.get("owner_id")) == B.CITY_OWNER_ID:
+                valor = f"{UI.money(listing.get('sale_price'))} · **propiedad de la ciudad**"
+            else:
+                valor = (f"{UI.money(listing.get('sale_price'))} · caja "
+                         f"{UI.money(listing.get('funds'))}")
             embed.add_field(
                 name=listing.get("name"),
-                value=f"{UI.money(listing.get('sale_price'))} · caja "
-                      f"{UI.money(listing.get('funds'))}",
+                value=valor,
                 inline=True,
             )
         await interaction.followup.send(
@@ -1093,9 +1103,68 @@ class Companies(commands.Cog):
         await _transfer_ownership_roles(interaction, result)
         embed = success_embed(
             f"\U0001F3E2 Compras {company.get('name')}",
-            f"Nuevo dueño: <@{interaction.user.id}> · vendedor: <@{result['seller_id']}>.")
+            f"Nuevo dueño: <@{interaction.user.id}> · vendedor: "
+            + ("**la ciudad**" if result.get("is_city_sale")
+               else f"<@{result['seller_id']}>") + ".")
         embed.add_field(name="Precio", value=UI.money(result["price"]), inline=True)
         embed.add_field(name="Caja del negocio", value=UI.money(result["company_balance"]), inline=True)
+        if result.get("is_city_sale"):
+            embed.set_footer(text="El importe entró en las arcas municipales, no en tu bolsillo")
+        else:
+            embed.set_footer(text="El importe entró en la caja del negocio, no a tu bolsillo")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+    @negocio.command(name="predeterminadas",
+                    description="Poner a la venta el catalogo oficial de empresas de la ciudad "
+                                "(administracion)")
+    async def predeterminadas(self, interaction: discord.Interaction):
+        """Siembra las empresas privadas del catalogo oficial.
+
+        Idempotente y no destructiva: no duplica nombres, no toca las empresas
+        que ya tengan dueño ciudadano y vuelve a anunciar solo las de la ciudad
+        que se hubieran quedado sin anuncio. El precio de cada venta lo cobra
+        un ciudadano y entra en las arcas municipales.
+        """
+        if not await check_admin_permission(interaction):
+            await interaction.response.send_message(
+                embed=error_embed("Sin permisos", "Solo administración puede sembrar empresas."),
+                ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id)
+        try:
+            result = await B.seed_city_companies(guild_id)
+        except Exception as error:
+            logger.error("[Empresas] Error sembrando el catalogo: %s", error, exc_info=True)
+            await interaction.followup.send(
+                embed=error_embed("No se pudo cargar", "Ha ocurrido un error de base de datos."),
+                ephemeral=True)
+            return
+
+        listed, already, sold, failed = (result["listed"], result["already"],
+                                         result["sold"], result["failed"])
+        if listed:
+            embed = success_embed(
+                "Empresas de la ciudad a la venta",
+                f"**{len(listed)}** empresas nuevas publicadas en el mercado.")
+        else:
+            embed = info_embed(
+                "Catálogo ya cargado",
+                "No hay empresas nuevas que publicar. No se ha creado ni modificado nada.")
+
+        if listed:
+            embed.add_field(name="Nuevas en venta",
+                            value="\n".join(f"• {n}" for n in listed)[:1024], inline=False)
+        if already:
+            embed.add_field(name="Ya en venta (intactas)",
+                            value="\n".join(f"• {n}" for n in already)[:1024], inline=False)
+        if sold:
+            embed.add_field(name="Ya vendidas (respetadas)",
+                            value="\n".join(f"• {n}" for n in sold)[:1024], inline=False)
+        if failed:
+            embed.add_field(name="No se pudieron publicar",
+                            value="\n".join(f"• {n}" for n in failed)[:1024], inline=False)
+        embed.set_footer(text="Visible en /empresa negocio mercado")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 

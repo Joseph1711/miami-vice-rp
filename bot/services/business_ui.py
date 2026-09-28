@@ -222,17 +222,27 @@ def shares_embed(config, holders, company) -> discord.Embed:
 
 
 def public_jobs_embed(jobs, user_jobs, viewer_id) -> discord.Embed:
+    """Tablon de empleos publicos.
+
+    `viewer_id` a None produce un embed neutro, apto para enviar en un canal
+    publico: no marca que empleos ocupa quien lo pidio ni revela cuantos tiene.
+    """
     embed = discord.Embed(title="\U0001F9FA Empleos públicos del servidor", color=0x00E5FF)
-    mine = {str(j.get("job_id")) for j in (user_jobs or [])}
+    es_privado = viewer_id is not None
+    mine = {str(j.get("job_id")) for j in (user_jobs or [])} if es_privado else set()
     if not jobs:
         embed.description = "El servidor todavía no ha publicado ningún empleo público."
         return embed
     lines = []
     for job in jobs:
+        if not es_privado:
+            lines.append(f"\U0001F4C5 {job_line(job)}")
+            continue
         mark = "\U0001F7E2" if str(job.get("id")) in mine else "\U0001F4C5"
         lines.append(f"{mark} {job_line(job)}")
     embed.description = "\n".join(lines)[:3900]
-    embed.set_footer(text=f"Tienes {len(mine)} empleo(s) activo(s)")
+    if es_privado:
+        embed.set_footer(text=f"Tienes {len(mine)} empleo(s) activo(s)")
     return embed
 
 

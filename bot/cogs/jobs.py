@@ -23,14 +23,25 @@ logger = logging.getLogger("bot.jobs")
 # Segundos que se mantiene vivo un selector de empleo.
 SELECT_TIMEOUT = 120.0
 
+# Anti-doble pulsacion al presentarse desde el tablón público.
+APPLY_COOLDOWN = 3.0
+
 
 class PublicJobApplyView(discord.ui.View):
-    """Selector de empleo publico con confirmacion en el mismo sitio."""
+    """Selector de empleo publico con confirmacion en el mismo sitio.
 
-    def __init__(self, guild_id: str, viewer_id: str, jobs, timeout: float = SELECT_TIMEOUT):
+    En modo `public` el tablón se envía a un canal visible para todos y cada
+    ciudadano puede usar el selector: la solicitud se registra a su nombre y la
+    respuesta le llega en privado. En modo privado el tablón solo es del
+    ciudadano que lo pidió.
+    """
+
+    def __init__(self, guild_id: str, viewer_id: str, jobs, timeout: float = SELECT_TIMEOUT,
+                 public: bool = False):
         super().__init__(timeout=timeout)
         self.guild_id = guild_id
         self.viewer_id = viewer_id
+        self.public = public
         options = [
             discord.SelectOption(
                 label=(job.get("name") or "Empleo")[:100],
@@ -49,7 +60,7 @@ class PublicJobApplyView(discord.ui.View):
             min_values=1, max_values=1, options=options))
 
     async def select_callback(self, interaction: discord.Interaction):
-        if str(interaction.user.id) != self.viewer_id:
+        if not self.public and str(interaction.user.id) != self.viewer_id:
             await interaction.response.send_message(
                 embed=error_embed("Este tablero no es tuyo", "Pide `/empleos` para abrir tu propio tablon."),
                 ephemeral=True)
@@ -59,9 +70,27 @@ class PublicJobApplyView(discord.ui.View):
             await interaction.response.send_message(
                 embed=warning_embed("Sin oferta", "Ahora mismo no hay empleos públicos abiertos."),
                 ephemeral=True)
-            self.stop()
+            if not self.public:
+                self.stop()
+            return
+        # En el tablón público la vista no se autodestruye, así que el mismo
+        # ciudadano podría seguir pulsando. Se limita igual que los botones.
+        if self.public:
+            try:
+                await B.claim_action(
+                    f"empleo:{self.guild_id}:{interaction.user.id}", APPLY_COOLDOWN)
+            except B.ActionInProgress as locked:
+                await interaction.response.send_message(
+                    embed=warning_embed("Espera", str(locked)), ephemeral=True)
+                return
+            try:
+                await apply_to_public_job(interaction, self.guild_id, job_id)
+            finally:
+                B.release_action(f"empleo:{self.guild_id}:{interaction.user.id}")
             return
         await apply_to_public_job(interaction, self.guild_id, job_id)
+        # El tablón privado era de un solo uso; el público sigue en pie
+        # para que el siguiente ciudadano pueda presentarse.
         self.stop()
 
 
@@ -192,15 +221,67 @@ class Jobs(commands.Cog):
 
     @employment.command(name="listar", description="Ver los empleos publicos disponibles")
     async def listar(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
+        await interaction.response.defer()
         guild_id = str(interaction.guild_id)
         jobs = await B.list_public_jobs(guild_id)
-        mine = await B.user_public_jobs(guild_id, str(interaction.user.id))
-        embed = UI.public_jobs_embed(jobs, mine, str(interaction.user.id))
+        # Tablon publico: el embed va sin datos del invocante y el selector lo
+        # puede usar cualquier ciudadano, que recibe la respuesta en privado.
+        embed = UI.public_jobs_embed(jobs, None, None)
         if jobs:
             embed.set_footer(text="Usa el selector para entrar en un empleo")
+        else:
+            embed.set_footer(text="Pide al staff que publique empleos con /empleos predeterminados")
         await interaction.followup.send(embed=embed, view=PublicJobApplyView(
-            guild_id, str(interaction.user.id), jobs), ephemeral=True)
+            guild_id, str(interaction.user.id), jobs, public=True))
+
+    @employment.command(name="predeterminados",
+                        description="Publicar el catalogo oficial de empleos publicos (administracion)")
+    async def predeterminados(self, interaction: discord.Interaction):
+        """Siembra los empleos del catalogo oficial que falten en el servidor.
+
+        No duplica ni pisa nada: los empleos ya publicados se dejan como estan,
+        con el sueldo y la descripcion que el admin haya configurado.
+        """
+        if not await check_admin_permission(interaction):
+            await interaction.response.send_message(
+                embed=error_embed("Sin permisos", "Solo administracion puede publicar empleos."),
+                ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        guild_id = str(interaction.guild_id)
+        try:
+            result = await B.seed_default_jobs(guild_id)
+        except Exception as error:
+            logger.error("[Empleos] Error sembrando el catalogo: %s", error, exc_info=True)
+            await interaction.followup.send(
+                embed=error_embed("No se pudo cargar", "Ha ocurrido un error de base de datos."),
+                ephemeral=True)
+            return
+
+        created, existing = result["created"], result["existing"]
+        if created:
+            embed = success_embed(
+                "Catalogo de empleos publicado",
+                f"**{len(created)}** empleos nuevos en el tablon.")
+            embed.add_field(
+                name="Nuevos",
+                value="\n".join(f"• {n}" for n in created)[:1024],
+                inline=False,
+            )
+        else:
+            embed = info_embed(
+                "Catalogo ya cargado",
+                f"Los **{len(existing)}** empleos oficiales ya estaban publicados. "
+                "No se ha creado ni modificado nada.")
+
+        if existing:
+            embed.add_field(
+                name="Ya existentes (intactos)",
+                value="\n".join(f"• {n}" for n in existing)[:1024],
+                inline=False,
+            )
+        embed.set_footer(text="Puedes cambiar sueldo y datos con /empleos editar y /empleos sueldo")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     @employment.command(name="mios", description="Ver tus empleos publicos activos")
     async def mios(self, interaction: discord.Interaction):
