@@ -960,8 +960,17 @@ def _pg_is_alive(conn) -> bool:
 
 
 def _pg_connect_kwargs(statement_timeout_ms: int) -> dict:
+    # prepare_threshold=None desactiva el cache de sentencias preparadas.
+    # psycopg nombra esas sentencias `_pg3_0`, `_pg3_1`... con un contador que
+    # vive en el cliente, y al reconectar el contador vuelve a cero. Si por
+    # delante hay un pooler en modo transaction (Supabase/pgbouncer, que
+    # reutiliza una misma sesion del servidor entre varios clientes), la
+    # sentencia ya existe al lado del servidor y Postgres responde
+    # `prepared statement "_pg3_0" already exists`. Sin cache no hay nombres que
+    # colisionen. El coste es un viaje de red extra por sentencia repetida.
     return dict(
         connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+        prepare_threshold=None,
         options=(
             f"-c statement_timeout={statement_timeout_ms} "
             f"-c lock_timeout={DB_LOCK_TIMEOUT_MS} "
@@ -1221,6 +1230,8 @@ def _is_uncommitted_error(error: BaseException) -> bool:
             _error_type(psycopg.errors, "QueryCanceled"),
             _error_type(psycopg.errors, "SerializationFailure"),
             _error_type(psycopg.errors, "DeadlockDetected"),
+            # La sentencia no llego a aplicarse: solo falló el PREPARE.
+            _error_type(psycopg.errors, "DuplicatePreparedStatement"),
         )
         if t is not None
     )

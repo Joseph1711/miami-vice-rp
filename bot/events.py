@@ -1,16 +1,53 @@
 import discord
 from discord import app_commands
 from discord.ext import tasks
+import asyncio
 import logging
 import datetime
 import random
 
+from bot.db import aexecute_many
 from bot.helpers import async_get_or_create_user, async_get_or_create_guild_config
 from bot.services.levels import add_xp
 from bot.middleware.antispam import is_spamming
 from bot.config import XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX
 
 logger = logging.getLogger("bot")
+
+# Miembros por lote al sincronizar nombres. Cada lote viaja como una sola
+# sentencia contra la base de datos en vez de una por miembro.
+USER_SYNC_BATCH = 50
+
+
+async def _sync_member_names(bot):
+    """Actualiza el nombre de los miembros en lotes, sin bloquear el arranque."""
+    pending = []
+    total = 0
+    try:
+        for guild in bot.guilds:
+            for member in guild.members:
+                if member.bot or not member.name:
+                    continue
+                pending.append((
+                    "UPDATE users SET username=$1, display_name=$2, updated_at=NOW() "
+                    "WHERE discord_id=$3 AND guild_id=$4",
+                    (member.name, member.display_name or member.name,
+                     str(member.id), str(guild.id)),
+                ))
+                if len(pending) < USER_SYNC_BATCH:
+                    continue
+                await aexecute_many(pending)
+                total += len(pending)
+                pending = []
+                await asyncio.sleep(0)  # cede el control al resto del bot
+        if pending:
+            await aexecute_many(pending)
+            total += len(pending)
+    except Exception as error:
+        logger.warning("Sincronizacion de nombres interrumpida tras %d miembros: %s", total, error)
+        return
+    if total:
+        logger.info("Nombres de usuario sincronizados: %d", total)
 
 def set_bot_task(task):
     """Compatibilidad con versiones que importan set_bot_task desde bot.events"""
@@ -83,20 +120,11 @@ def setup_events(bot):
         except Exception as e:
             logger.error(f"Error sincronizando comandos: {e}")
 
-        # Sincronización en segundo plano de nombres de usuarios para servidores conocidos
-        try:
-            from bot.helpers import async_update_user_name
-            for guild in bot.guilds:
-                for member in guild.members:
-                    if not member.bot:
-                        await async_update_user_name(
-                            str(member.id), 
-                            str(guild.id), 
-                            username=member.name, 
-                            display_name=member.display_name
-                        )
-        except Exception as e:
-            logger.debug(f"User sync notice: {e}")
+        # Sincronización de nombres de usuario en segundo plano y por lotes.
+        # Antes se hacia miembro a miembro y en serie dentro de on_ready: con
+        # un servidor grande eran cientos de UPDATE seguidos que bloqueaban el
+        # arranque y saturaban el pool de conexiones.
+        asyncio.create_task(_sync_member_names(bot))
 
     @bot.event
     async def on_interaction(interaction: discord.Interaction):
