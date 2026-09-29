@@ -14,7 +14,7 @@ Convenciones de custom_id
 import discord
 
 from bot.embeds import error_embed, success_embed, warning_embed
-from bot.helpers import format_currency
+from bot.helpers import format_currency, safe_emoji
 from bot.services import business as B
 
 # ---------------------------------------------------------------------------
@@ -712,7 +712,7 @@ class PublicJobSelectView(discord.ui.View):
                 label=(j.get("name") or "Empleo")[:100],
                 value=j.get("id"),
                 description=f"{money(j.get('salary'))} diarios"[:100],
-                emoji=(j.get("emoji") or "\U0001F9FA")[:2],
+                emoji=safe_emoji(j.get("emoji")),
             )
             for j in jobs[:25]
         ]

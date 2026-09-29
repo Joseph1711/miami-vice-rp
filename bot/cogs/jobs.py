@@ -14,7 +14,7 @@ from discord.ext import commands
 
 from bot.db import aexecute
 from bot.embeds import error_embed, info_embed, success_embed, warning_embed
-from bot.helpers import check_admin_permission
+from bot.helpers import check_admin_permission, safe_emoji
 from bot.services import business as B
 from bot.services import business_ui as UI
 
@@ -47,7 +47,7 @@ class PublicJobApplyView(discord.ui.View):
                 label=(job.get("name") or "Empleo")[:100],
                 value=job["id"],
                 description=f"{UI.money(job.get('salary'))} diarios"[:100],
-                emoji=(job.get("emoji") or "\U0001F9FA")[:2],
+                emoji=safe_emoji(job.get("emoji")),
             )
             for job in jobs[:25]
         ]
@@ -259,6 +259,7 @@ class Jobs(commands.Cog):
             return
 
         created, existing = result["created"], result["existing"]
+        repaired = result.get("repaired") or []
         if created:
             embed = success_embed(
                 "Catalogo de empleos publicado",
@@ -278,6 +279,14 @@ class Jobs(commands.Cog):
             embed.add_field(
                 name="Ya existentes (intactos)",
                 value="\n".join(f"• {n}" for n in existing)[:1024],
+                inline=False,
+            )
+        if repaired:
+            note = ("\n\nTenian un emoji que Discord rechazaba y rompia "
+                    "`/empleos listar`. Se ha restituido el del catalogo.")
+            embed.add_field(
+                name="Emoji reparado",
+                value="\n".join(f"• {n}" for n in repaired)[:1024 - len(note)] + note,
                 inline=False,
             )
         embed.set_footer(text="Puedes cambiar sueldo y datos con /empleos editar y /empleos sueldo")

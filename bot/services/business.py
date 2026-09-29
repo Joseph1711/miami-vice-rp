@@ -23,7 +23,8 @@ import datetime
 import logging
 
 from bot.db import aexecute, aexecute_atomic
-from bot.helpers import generate_id, async_get_or_create_user, async_get_or_create_guild_config
+from bot.helpers import (EMOJI_FALLBACK, generate_id, async_get_or_create_user,
+                         async_get_or_create_guild_config, safe_emoji)
 from bot.services.catalogs import CITY_OWNER_ID, DEFAULT_JOBS, CITY_COMPANIES
 
 logger = logging.getLogger("bot.business")
@@ -2119,17 +2120,32 @@ async def seed_default_jobs(guild_id: str):
     Idempotente: solo inserta los que no existen (comparacion sin distinguir
     mayusculas, igual que al crear a mano). Los que ya estan no se tocan, de
     forma que un sueldo o una descripcion editados por el admin se respetan.
+    La unica excepcion es el emoji: si el guardado no es utilizable por
+    Discord se restituye el del catalogo, porque un emoji roto hacia fallar
+    `/empleos listar` entero.
     """
-    created, existing = [], []
+    created, existing, repaired = [], [], []
     for job in DEFAULT_JOBS:
         name = job["name"]
+        catalog_emoji = job.get("emoji", EMOJI_FALLBACK)
         found = await aexecute(
-            "SELECT id FROM jobs WHERE guild_id=$1 AND name ILIKE $2",
+            "SELECT id, emoji FROM jobs WHERE guild_id=$1 AND name ILIKE $2",
             (guild_id, name),
             fetch="one",
         )
         if found:
             existing.append(name)
+            if safe_emoji(found.get("emoji"), None) is None:
+                try:
+                    await aexecute(
+                        "UPDATE jobs SET emoji=$1, updated_at=NOW() "
+                        "WHERE id=$2 AND guild_id=$3",
+                        (catalog_emoji, found["id"], guild_id),
+                    )
+                    repaired.append(name)
+                except Exception as error:
+                    logger.warning("[Empleos] No se pudo reparar el emoji de '%s': %s",
+                                   name, error)
             continue
         job_id = generate_id()
         try:
@@ -2139,7 +2155,7 @@ async def seed_default_jobs(guild_id: str):
                       is_single, max_workers, sort_order, created_at, updated_at)
                    VALUES ($1,$2,$3,$4,$5,NULL,$6,TRUE,TRUE,$7,$8,NOW(),NOW())""",
                 (job_id, guild_id, name, money(job["salary"]), job.get("description", ""),
-                 job.get("emoji", "\U0001F9FA"), max(0, int(job.get("max_workers") or 0)),
+                 catalog_emoji, max(0, int(job.get("max_workers") or 0)),
                  len(DEFAULT_JOBS)),
             )
         except Exception as error:
@@ -2149,7 +2165,7 @@ async def seed_default_jobs(guild_id: str):
             existing.append(name)
             continue
         created.append(name)
-    return {"created": created, "existing": existing}
+    return {"created": created, "existing": existing, "repaired": repaired}
 
 
 async def seed_city_companies(guild_id: str):

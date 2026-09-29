@@ -72,7 +72,7 @@ DEFAULT_JOBS = [
     {
         "name": "Deposito de Combustible",
         "salary": 220,
-        "emoji": "\U0001F6FD",
+        "emoji": "⛽",
         "description": "Almacen y distribucion de combustible para las gasolineras.",
         "max_workers": 0,
     },

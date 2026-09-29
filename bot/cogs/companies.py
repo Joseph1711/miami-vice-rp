@@ -27,7 +27,7 @@ from discord.ext import commands
 from bot.db import aexecute
 from bot.embeds import error_embed, info_embed, success_embed, warning_embed
 from bot.helpers import (async_get_or_create_guild_config, async_get_or_create_user,
-                         check_admin_permission)
+                         check_admin_permission, safe_emoji)
 from bot.services import business as B
 from bot.services import business_ui as UI
 
@@ -418,7 +418,7 @@ class CatalogBuyView(discord.ui.View):
                 label=f"{item.get('name')}"[:100],
                 value=item["id"],
                 description=f"{UI.money(item.get('price'))} · {stock_text}"[:100],
-                emoji=(item.get("emoji") or "\U0001F9FE")[:2],
+                emoji=safe_emoji(item.get("emoji"), "\U0001F9FE"),
             ))
         if options:
             self.add_item(discord.ui.Select(

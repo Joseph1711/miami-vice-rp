@@ -1,5 +1,7 @@
+import re
 import uuid
 import math
+import unicodedata
 import datetime
 from bot.db import execute, aexecute
 
@@ -79,6 +81,95 @@ def random_between(a, b):
 
 def chunk_array(arr, size):
     return [arr[i:i+size] for i in range(0, len(arr), size)]
+
+
+# ---------------------------------------------------------------------------
+# Emoji para componentes de Discord
+# ---------------------------------------------------------------------------
+#
+# Discord rechaza el envio ENTERO (400 / 50035 "Invalid emoji") cuando un solo
+# `emoji.name` de un menu o boton no es un emoji unicode limpio. En componentes
+# los selectores de variacion U+FE0E / U+FE0F estan prohibidos, asi que un
+# "🍽️" copiado del selector del sistema tumba el comando aunque se vea bien.
+# Recortar el texto a dos caracteres (estilo emoji[:2]) tampoco vale: parte las
+# secuencias ZWJ y destroza los emojis personalizados "<:nombre:id>".
+
+EMOJI_FALLBACK = "\U0001F9FA"
+
+_CUSTOM_EMOJI_RE = re.compile(
+    r"\A<(?P<animated>a)?:(?P<name>[A-Za-z0-9_]{2,32}):(?P<id>\d{15,25})>\Z"
+)
+_STRIP_VARIATIONS = {0xFE0E: None, 0xFE0F: None}
+_ZWJ = "\u200d"
+
+
+def _is_emoji_base(char: str) -> bool:
+    """True si `char` puede abrir un emoji (base, indicador o tono de piel)."""
+    point = ord(char)
+    if not (0x1F000 <= point <= 0x1FAFF          # pictogramas
+            or 0x2600 <= point <= 0x27BF         # simbolos y dingbats
+            or 0x2B00 <= point <= 0x2BFF         # flechas y cuadrados
+            or 0x2190 <= point <= 0x21FF         # flechas
+            or 0x2300 <= point <= 0x23FF         # Misc tecnico
+            or 0x25A0 <= point <= 0x25FF         # formas
+            or 0x1F1E6 <= point <= 0x1F1FF       # indicadores regionales
+            or 0x1F3FB <= point <= 0x1F3FF       # tonos de piel
+            or point in (0x203C, 0x2049, 0x2122, 0x2139, 0x3030, 0x303D,
+                         0x3297, 0x3299)):
+        return False
+    try:
+        unicodedata.name(char)
+    except ValueError:
+        return False  # codepoint sin asignar: Discord no lo conoce
+    return True
+
+
+def _skip_modifiers(text: str, index: int) -> int:
+    """Avanza los modificadores que pueden seguir a la base de un emoji."""
+    while index < len(text):
+        point = ord(text[index])
+        if (point in (0xFE0E, 0xFE0F, 0x20E3)
+                or 0x1F3FB <= point <= 0x1F3FF    # tono de piel
+                or 0xE0020 <= point <= 0xE007F):  # etiqueta de bandera
+            index += 1
+        else:
+            break
+    return index
+
+
+def _emoji_cluster(text: str) -> str:
+    """Primer cluster de emoji completo de `text`, o "" si no hay ninguno."""
+    if not text or not _is_emoji_base(text[0]):
+        return ""
+    point = ord(text[0])
+    if 0x1F1E6 <= point <= 0x1F1FF:  # bandera: dos indicadores regionales
+        if len(text) > 1 and 0x1F1E6 <= ord(text[1]) <= 0x1F1FF:
+            return text[:2]
+        return ""
+    end = _skip_modifiers(text, 1)
+    while text[end:end + 1] == _ZWJ:  # secuencia ZWJ: 🧑‍🚒
+        nxt = end + 1
+        if nxt >= len(text) or not _is_emoji_base(text[nxt]):
+            break
+        end = _skip_modifiers(text, nxt + 1)
+    return text[:end]
+
+
+def safe_emoji(value, fallback: str = EMOJI_FALLBACK) -> str:
+    """Normaliza un emoji para usarlo en un menu o boton de Discord.
+
+    Nunca lanza y siempre devuelve algo que Discord acepta: un emoji
+    personalizado se respeta tal cual, a un emoji unicode se le quitan los
+    selectores de variacion y se le conserva el primer cluster entero, y si no
+    queda nada utilizable se cae a `fallback` (None deja la opcion sin emoji).
+    Asi un valor sucio en la base de datos no puede romper un comando entero.
+    """
+    if value is None:
+        return fallback
+    text = str(value).strip()
+    if _CUSTOM_EMOJI_RE.match(text):
+        return text
+    return _emoji_cluster(text.translate(_STRIP_VARIATIONS)) or fallback
 
 def get_or_create_user(discord_id, guild_id, username=None, display_name=None):
     row = execute(
