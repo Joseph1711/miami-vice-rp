@@ -853,9 +853,11 @@ class Companies(commands.Cog):
             await interaction.followup.send(
                 embed=info_embed("Menú vacío", f"**{company['name']}** todavia no ofrece nada."))
             return
-        await interaction.followup.send(
+        await UI.send_view(
+            interaction.followup.send,
             embed=UI.catalog_embed(items, company),
-            view=CatalogBuyView(company["id"], str(interaction.user.id), items))
+            view=CatalogBuyView(company["id"], str(interaction.user.id), items),
+        )
 
     @catalogo.command(name="agregar_producto", description="Añadir un producto al menú (define tú el precio)")
     async def agregar_producto(self, interaction: discord.Interaction):
@@ -1280,8 +1282,12 @@ async def send_panel(interaction, company):
     access = await B.resolve_access(str(interaction.guild_id), str(interaction.user.id), company["id"])
     embed = await UI.company_dossier(company["id"], access, str(interaction.guild_id))
     CompanyContext.remember(company["id"], str(interaction.user.id))
-    await interaction.followup.send(
-        embed=embed, view=CompanyPanelView(company["id"], str(interaction.user.id)), ephemeral=True)
+    await UI.send_view(
+        interaction.followup.send,
+        embed=embed,
+        view=CompanyPanelView(company["id"], str(interaction.user.id)),
+        ephemeral=True,
+    )
 
 
 async def handle_panel_button(bot, interaction: discord.Interaction, company_id: str, action: str):

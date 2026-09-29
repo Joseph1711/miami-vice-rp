@@ -11,11 +11,58 @@ Convenciones de custom_id
 """
 
 
+import logging
+
 import discord
 
 from bot.embeds import error_embed, success_embed, warning_embed
 from bot.helpers import format_currency, safe_emoji
 from bot.services import business as B
+
+logger = logging.getLogger("bot.business_ui")
+
+# ---------------------------------------------------------------------------
+# Envio de vistas
+# ---------------------------------------------------------------------------
+
+
+def _drop_view_emojis(view) -> bool:
+    """Quita todos los emojis de una vista. Devuelve True si habia alguno."""
+    found = False
+    for item in getattr(view, "children", ()):
+        for option in getattr(item, "options", ()):
+            if option.emoji is not None:
+                option.emoji = None
+                found = True
+        if getattr(item, "emoji", None) is not None:
+            item.emoji = None
+            found = True
+    return found
+
+
+async def send_view(send, **kwargs):
+    """Envia un mensaje con vista y reintenta sin emojis si Discord los rechaza.
+
+    Discord valida todo el `components` de golpe: un solo `emoji.name` que no
+    reconozca tumba la respuesta entera con 400 / 50035 y el usuario se queda
+    sin comando. `safe_emoji()` ya evita casi todos los casos, pero si aun
+    asi Discord rechaza algo se prefiere perder los emojis que perder el
+    tablon, y el valor concreto se deja en el log para poder arreglarlo.
+    """
+    view = kwargs.get("view")
+    try:
+        return await send(**kwargs)
+    except discord.HTTPException as error:
+        if getattr(error, "status", None) != 400 or getattr(error, "code", None) != 50035:
+            raise
+        if view is None or not _drop_view_emojis(view):
+            raise
+        logger.warning(
+            "[UI] Discord rechazo un emoji del componente (%s); se reintenta sin emojis",
+            getattr(error, "text", None) or error,
+        )
+        return await send(**kwargs)
+
 
 # ---------------------------------------------------------------------------
 # Formateo

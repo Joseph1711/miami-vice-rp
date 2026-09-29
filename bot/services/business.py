@@ -2121,31 +2121,24 @@ async def seed_default_jobs(guild_id: str):
     mayusculas, igual que al crear a mano). Los que ya estan no se tocan, de
     forma que un sueldo o una descripcion editados por el admin se respetan.
     La unica excepcion es el emoji: si el guardado no es utilizable por
-    Discord se restituye el del catalogo, porque un emoji roto hacia fallar
-    `/empleos listar` entero.
+    Discord se restituye, porque un emoji roto hacia fallar `/empleos listar`
+    entero. Al final se barren todos los empleos del servidor, no solo los del
+    catalogo, para no dejar ninguno sin arreglar.
     """
+    from bot.services.business_ui import job_emoji as emoji_por_nombre
+
     created, existing, repaired = [], [], []
+    catalog = {job["name"]: job.get("emoji", EMOJI_FALLBACK) for job in DEFAULT_JOBS}
     for job in DEFAULT_JOBS:
         name = job["name"]
-        catalog_emoji = job.get("emoji", EMOJI_FALLBACK)
+        catalog_emoji = catalog[name]
         found = await aexecute(
-            "SELECT id, emoji FROM jobs WHERE guild_id=$1 AND name ILIKE $2",
+            "SELECT id FROM jobs WHERE guild_id=$1 AND name ILIKE $2",
             (guild_id, name),
             fetch="one",
         )
         if found:
             existing.append(name)
-            if safe_emoji(found.get("emoji"), None) is None:
-                try:
-                    await aexecute(
-                        "UPDATE jobs SET emoji=$1, updated_at=NOW() "
-                        "WHERE id=$2 AND guild_id=$3",
-                        (catalog_emoji, found["id"], guild_id),
-                    )
-                    repaired.append(name)
-                except Exception as error:
-                    logger.warning("[Empleos] No se pudo reparar el emoji de '%s': %s",
-                                   name, error)
             continue
         job_id = generate_id()
         try:
@@ -2165,6 +2158,33 @@ async def seed_default_jobs(guild_id: str):
             existing.append(name)
             continue
         created.append(name)
+
+    # Barrido final sobre TODOS los empleos del servidor, tambien los que el
+    # admin creo a mano: cualquier emoji que Discord vaya a rechazar se
+    # sustituye aqui, porque un solo valor sucio tumba `/empleos listar` entero.
+    roto = await aexecute(
+        "SELECT id, name, emoji FROM jobs WHERE guild_id=$1", (guild_id,), fetch="all",
+    ) or []
+    for job in roto:
+        if safe_emoji(job.get("emoji"), None) is not None:
+            continue
+        name = job.get("name") or ""
+        nuevo = catalog.get(name) or emoji_por_nombre(name)
+        try:
+            await aexecute(
+                "UPDATE jobs SET emoji=$1, updated_at=NOW() WHERE id=$2 AND guild_id=$3",
+                (nuevo, job["id"], guild_id),
+            )
+        except Exception as error:
+            logger.warning("[Empleos] No se pudo reparar el emoji de '%s': %s",
+                           name, error)
+            continue
+        logger.warning("[Empleos] Emoji reparado en '%s': %r -> %r",
+                       name, job.get("emoji"), nuevo)
+        if name and name not in existing:
+            existing.append(name)
+        if name and name not in repaired:
+            repaired.append(name)
     return {"created": created, "existing": existing, "repaired": repaired}
 
 

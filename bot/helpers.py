@@ -1,7 +1,6 @@
 import re
 import uuid
 import math
-import unicodedata
 import datetime
 from bot.db import execute, aexecute
 
@@ -88,49 +87,71 @@ def chunk_array(arr, size):
 # ---------------------------------------------------------------------------
 #
 # Discord rechaza el envio ENTERO (400 / 50035 "Invalid emoji") cuando un solo
-# `emoji.name` de un menu o boton no es un emoji unicode limpio. En componentes
-# los selectores de variacion U+FE0E / U+FE0F estan prohibidos, asi que un
-# "🍽️" copiado del selector del sistema tumba el comando aunque se vea bien.
-# Recortar el texto a dos caracteres (estilo emoji[:2]) tampoco vale: parte las
-# secuencias ZWJ y destroza los emojis personalizados "<:nombre:id>".
+# `emoji.name` de un menu o de un boton no es un emoji que su API reconoce. No
+# vale "se ve bien": un code point sin asignar (U+1F6FD), un texto, un emoji
+# truncado a medias o un selector de variacion U+FE0E / U+FE0F (prohibido en
+# componentes) tumban el comando. Por eso aqui no se adivina con rangos
+# aproximados: `_EMOJI_RANGES` es el conjunto RGI de emoji 16.0 tal cual lo
+# publica unicode.org en Public/emoji/16.0/emoji-test.txt.
+#
+# El recorte al estilo `emoji[:2]` que se usaba antes era peor que no hacer
+# nada: partia las secuencias ZWJ y destrozaba el marcado de los emojis
+# personalizados "<:nombre:id>".
 
 EMOJI_FALLBACK = "\U0001F9FA"
+
+# Code points base de un emoji RGI, en pares (inicio, fin) cerrados.
+_EMOJI_RANGES = (
+    0x00A9, 0x00A9, 0x00AE, 0x00AE, 0x203C, 0x203C, 0x2049, 0x2049, 0x2122, 0x2122, 0x2139, 0x2139,
+    0x2194, 0x2199, 0x21A9, 0x21AA, 0x231A, 0x231B, 0x2328, 0x2328, 0x23CF, 0x23CF, 0x23E9, 0x23F3,
+    0x23F8, 0x23FA, 0x24C2, 0x24C2, 0x25AA, 0x25AB, 0x25B6, 0x25B6, 0x25C0, 0x25C0, 0x25FB, 0x25FE,
+    0x2600, 0x2604, 0x260E, 0x260E, 0x2611, 0x2611, 0x2614, 0x2615, 0x2618, 0x2618, 0x261D, 0x261D,
+    0x2620, 0x2620, 0x2622, 0x2623, 0x2626, 0x2626, 0x262A, 0x262A, 0x262E, 0x262F, 0x2638, 0x263A,
+    0x2640, 0x2640, 0x2642, 0x2642, 0x2648, 0x2653, 0x265F, 0x2660, 0x2663, 0x2663, 0x2665, 0x2666,
+    0x2668, 0x2668, 0x267B, 0x267B, 0x267E, 0x267F, 0x2692, 0x2697, 0x2699, 0x2699, 0x269B, 0x269C,
+    0x26A0, 0x26A1, 0x26A7, 0x26A7, 0x26AA, 0x26AB, 0x26B0, 0x26B1, 0x26BD, 0x26BE, 0x26C4, 0x26C5,
+    0x26C8, 0x26C8, 0x26CE, 0x26CF, 0x26D1, 0x26D1, 0x26D3, 0x26D4, 0x26E9, 0x26EA, 0x26F0, 0x26F5,
+    0x26F7, 0x26FA, 0x26FD, 0x26FD, 0x2702, 0x2702, 0x2705, 0x2705, 0x2708, 0x270D, 0x270F, 0x270F,
+    0x2712, 0x2712, 0x2714, 0x2714, 0x2716, 0x2716, 0x271D, 0x271D, 0x2721, 0x2721, 0x2728, 0x2728,
+    0x2733, 0x2734, 0x2744, 0x2744, 0x2747, 0x2747, 0x274C, 0x274C, 0x274E, 0x274E, 0x2753, 0x2755,
+    0x2757, 0x2757, 0x2763, 0x2764, 0x2795, 0x2797, 0x27A1, 0x27A1, 0x27B0, 0x27B0, 0x27BF, 0x27BF,
+    0x2934, 0x2935, 0x2B05, 0x2B07, 0x2B1B, 0x2B1C, 0x2B50, 0x2B50, 0x2B55, 0x2B55, 0x3030, 0x3030,
+    0x303D, 0x303D, 0x3297, 0x3297, 0x3299, 0x3299, 0x1F004, 0x1F004, 0x1F0CF, 0x1F0CF, 0x1F170, 0x1F171,
+    0x1F17E, 0x1F17F, 0x1F18E, 0x1F18E, 0x1F191, 0x1F19A, 0x1F201, 0x1F202, 0x1F21A, 0x1F21A, 0x1F22F, 0x1F22F,
+    0x1F232, 0x1F23A, 0x1F250, 0x1F251, 0x1F300, 0x1F321, 0x1F324, 0x1F393, 0x1F396, 0x1F397, 0x1F399, 0x1F39B,
+    0x1F39E, 0x1F3F0, 0x1F3F3, 0x1F3F5, 0x1F3F7, 0x1F3FA, 0x1F400, 0x1F4FD, 0x1F4FF, 0x1F53D, 0x1F549, 0x1F54E,
+    0x1F550, 0x1F567, 0x1F56F, 0x1F570, 0x1F573, 0x1F57A, 0x1F587, 0x1F587, 0x1F58A, 0x1F58D, 0x1F590, 0x1F590,
+    0x1F595, 0x1F596, 0x1F5A4, 0x1F5A5, 0x1F5A8, 0x1F5A8, 0x1F5B1, 0x1F5B2, 0x1F5BC, 0x1F5BC, 0x1F5C2, 0x1F5C4,
+    0x1F5D1, 0x1F5D3, 0x1F5DC, 0x1F5DE, 0x1F5E1, 0x1F5E1, 0x1F5E3, 0x1F5E3, 0x1F5E8, 0x1F5E8, 0x1F5EF, 0x1F5EF,
+    0x1F5F3, 0x1F5F3, 0x1F5FA, 0x1F64F, 0x1F680, 0x1F6C5, 0x1F6CB, 0x1F6D2, 0x1F6D5, 0x1F6D7, 0x1F6DC, 0x1F6E5,
+    0x1F6E9, 0x1F6E9, 0x1F6EB, 0x1F6EC, 0x1F6F0, 0x1F6F0, 0x1F6F3, 0x1F6FC, 0x1F7E0, 0x1F7EB, 0x1F7F0, 0x1F7F0,
+    0x1F90C, 0x1F93A, 0x1F93C, 0x1F945, 0x1F947, 0x1F9AF, 0x1F9B4, 0x1F9FF, 0x1FA70, 0x1FA7C, 0x1FA80, 0x1FA89,
+    0x1FA8F, 0x1FAC6, 0x1FACE, 0x1FADC, 0x1FADF, 0x1FAE9, 0x1FAF0, 0x1FAF8,
+)
 
 _CUSTOM_EMOJI_RE = re.compile(
     r"\A<(?P<animated>a)?:(?P<name>[A-Za-z0-9_]{2,32}):(?P<id>\d{15,25})>\Z"
 )
 _STRIP_VARIATIONS = {0xFE0E: None, 0xFE0F: None}
 _ZWJ = "\u200d"
+_REGIONAL = range(0x1F1E6, 0x1F200)
+_SKIN = range(0x1F3FB, 0x1F400)
+_TAG = range(0xE0020, 0xE0080)
+_KEYCAP = "\u20e3"
 
 
 def _is_emoji_base(char: str) -> bool:
-    """True si `char` puede abrir un emoji (base, indicador o tono de piel)."""
+    """True si `char` es la base de un emoji que la API de Discord acepta."""
     point = ord(char)
-    if not (0x1F000 <= point <= 0x1FAFF          # pictogramas
-            or 0x2600 <= point <= 0x27BF         # simbolos y dingbats
-            or 0x2B00 <= point <= 0x2BFF         # flechas y cuadrados
-            or 0x2190 <= point <= 0x21FF         # flechas
-            or 0x2300 <= point <= 0x23FF         # Misc tecnico
-            or 0x25A0 <= point <= 0x25FF         # formas
-            or 0x1F1E6 <= point <= 0x1F1FF       # indicadores regionales
-            or 0x1F3FB <= point <= 0x1F3FF       # tonos de piel
-            or point in (0x203C, 0x2049, 0x2122, 0x2139, 0x3030, 0x303D,
-                         0x3297, 0x3299)):
-        return False
-    try:
-        unicodedata.name(char)
-    except ValueError:
-        return False  # codepoint sin asignar: Discord no lo conoce
-    return True
+    return any(lo <= point <= hi
+               for lo, hi in zip(_EMOJI_RANGES[::2], _EMOJI_RANGES[1::2]))
 
 
 def _skip_modifiers(text: str, index: int) -> int:
     """Avanza los modificadores que pueden seguir a la base de un emoji."""
     while index < len(text):
-        point = ord(text[index])
-        if (point in (0xFE0E, 0xFE0F, 0x20E3)
-                or 0x1F3FB <= point <= 0x1F3FF    # tono de piel
-                or 0xE0020 <= point <= 0xE007F):  # etiqueta de bandera
+        char = text[index]
+        if char == _KEYCAP or ord(char) in _SKIN or ord(char) in _TAG:
             index += 1
         else:
             break
@@ -139,15 +160,17 @@ def _skip_modifiers(text: str, index: int) -> int:
 
 def _emoji_cluster(text: str) -> str:
     """Primer cluster de emoji completo de `text`, o "" si no hay ninguno."""
-    if not text or not _is_emoji_base(text[0]):
+    if not text:
         return ""
-    point = ord(text[0])
-    if 0x1F1E6 <= point <= 0x1F1FF:  # bandera: dos indicadores regionales
-        if len(text) > 1 and 0x1F1E6 <= ord(text[1]) <= 0x1F1FF:
+    first = text[0]
+    if ord(first) in _REGIONAL:  # bandera: dos indicadores regionales
+        if len(text) > 1 and ord(text[1]) in _REGIONAL:
             return text[:2]
         return ""
+    if not _is_emoji_base(first):
+        return ""
     end = _skip_modifiers(text, 1)
-    while text[end:end + 1] == _ZWJ:  # secuencia ZWJ: 🧑‍🚒
+    while text[end:end + 1] == _ZWJ:  # secuencia ZWJ: bombero, professions...
         nxt = end + 1
         if nxt >= len(text) or not _is_emoji_base(text[nxt]):
             break
@@ -170,6 +193,7 @@ def safe_emoji(value, fallback: str = EMOJI_FALLBACK) -> str:
     if _CUSTOM_EMOJI_RE.match(text):
         return text
     return _emoji_cluster(text.translate(_STRIP_VARIATIONS)) or fallback
+
 
 def get_or_create_user(discord_id, guild_id, username=None, display_name=None):
     row = execute(

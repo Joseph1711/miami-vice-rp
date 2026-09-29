@@ -231,8 +231,11 @@ class Jobs(commands.Cog):
             embed.set_footer(text="Usa el selector para entrar en un empleo")
         else:
             embed.set_footer(text="Pide al staff que publique empleos con /empleos predeterminados")
-        await interaction.followup.send(embed=embed, view=PublicJobApplyView(
-            guild_id, str(interaction.user.id), jobs, public=True))
+        await UI.send_view(
+            interaction.followup.send,
+            embed=embed,
+            view=PublicJobApplyView(guild_id, str(interaction.user.id), jobs, public=True),
+        )
 
     @employment.command(name="predeterminados",
                         description="Publicar el catalogo oficial de empleos publicos (administracion)")
