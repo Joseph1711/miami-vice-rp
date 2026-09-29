@@ -1484,34 +1484,62 @@ async def aexecute_atomic(queries):
     return await _run_db_operation(execute_atomic, queries)
 
 
+# Sentencias del esquema que fallan solo porque una tabla YA existente no tiene
+# la columna que su indice usa: `CREATE TABLE IF NOT EXISTS` no repara una tabla
+# vieja. Pasaba con `properties(company_id)` al meter empresas en un servidor que
+# ya tenia datos. La columna y el indice los pone despues la migracion, asi que
+# en el esquema esa sentencia se omite en vez de impedir el arranque.
+_MISSING_COLUMN_ERRORS = (
+    re.compile(r'column "[^"]+" does not exist', re.IGNORECASE),
+    re.compile(r"no such column", re.IGNORECASE),
+)
+
+
+def _is_missing_column_error(error: Exception) -> bool:
+    """True si el error es "a esa tabla le falta la columna", no otra cosa."""
+    message = str(error)
+    return any(pattern.search(message) for pattern in _MISSING_COLUMN_ERRORS)
+
+
 def initialize_schema(schema: str):
-    """Crea el esquema completo. Solo en arranque: usa conexion propia y timeout amplio."""
+    """Crea el esquema completo. Solo en arranque: usa conexion propia y timeout amplio.
+
+    Cada sentencia DDL va por separado y en autocommit. Antes era una unica
+    transaccion: un solo fallo abortaba las 60+ CREATE TABLE que venian
+    despues y el bot no arrancaba. Ahora una sentencia que falla por una tabla
+    vieja sin esa columna se omite sola (la repara la migracion posterior) y
+    cualquier otro error se sigue propagateiendo.
+    """
     if USE_POSTGRES:
         conn = _connect_postgres(DB_MIGRATION_TIMEOUT_MS)
     else:
         conn = _connect_sqlite()
+    pending = []
     try:
         if USE_POSTGRES:
-            with conn.cursor() as cursor:
-                for statement in schema.split(";"):
-                    if statement.strip():
-                        cursor.execute(statement)
-            conn.commit()
-        else:
-            with conn:
-                conn.executescript(_to_sqlite(schema))
-    except Exception:
-        if USE_POSTGRES:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-        raise
+            conn.autocommit = True
+        with conn:
+            for statement in schema.split(";"):
+                if not statement.strip():
+                    continue
+                if not USE_POSTGRES:
+                    statement = _to_sqlite(statement)
+                try:
+                    conn.execute(statement)
+                except Exception as stmt_error:
+                    if not _is_missing_column_error(stmt_error):
+                        raise
+                    pending.append(statement.strip().split("\n")[0][:60])
     finally:
         try:
             conn.close()
         except Exception:
             pass
+    if pending:
+        logger.warning(
+            "[DB] %d sentencia(s) del esquema pendientes de migracion: %s",
+            len(pending), pending[:3],
+        )
     # Las migraciones van DESPUES: los ALTER COLUMN necesitan que las tablas
     # del esquema ya existan.
     _ensure_migrations_done()
