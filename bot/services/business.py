@@ -93,9 +93,10 @@ LEDGER = {
     "shares": ("Acciones", "\U0001F4C5"),
     "dividend": ("Dividendo", "\U0001F4B0"),
     "company_sale": ("Venta de la empresa", "\U0001F3E2"),
-    "tax": ("Impuestos", "\U0001F3E6"),
+    "tax": ("Impuestos", "\U0001F4E6"),
     "adjustment": ("Ajuste", "⚖️"),
     "inactivation": ("Inicialización", "\U0001F4E3"),
+    "closure": ("Cierre del negocio", "\U0001F6D1"),
 }
 
 # Tipos de transaccion registrados en la cartera personal del ciudadano.
@@ -112,6 +113,7 @@ TX = {
     "company_shares": "Compra de acciones",
     "company_dividend": "Dividendo de empresa",
     "company_expense": "Pago de empresa",
+    "company_closure": "Cierre de empresa",
 }
 TX_LABELS = {label: key for key, label in TX.items()}
 
@@ -1399,6 +1401,124 @@ async def buy_company(guild_id: str, company_id: str, buyer_id: str):
         "is_city_sale": is_city_sale,
         "company": company,
         "company_balance": funds if is_city_sale else funds + price,
+    }
+
+
+# ---------------------------------------------------------------------------
+# DISOLUCION: la caja vuelve al dueno y los locales vuelven al mercado
+# ---------------------------------------------------------------------------
+
+
+async def company_properties(guild_id: str, company_id: str):
+    """Locales que pertenecen a la empresa (`properties.company_id`)."""
+    return await aexecute(
+        "SELECT * FROM properties WHERE guild_id=$1 AND company_id=$2 ORDER BY type, price",
+        (guild_id, company_id),
+        fetch="all",
+    ) or []
+
+
+async def dissolve_company(guild_id: str, company_id: str, actor_id: str):
+    """Disuelve la empresa y devuelve su caja al dueno.
+
+    No se borra el historial: la empresa pasa a `closed` y sale de los listados,
+    pero conserva menu, catalogo, puestos y configuracion por si algun dia se
+    reactiva. Lo que si cambia de estado:
+
+        empresa.funds -X -> dueno.cash +X   (a la Tesoreria si es empresa de la ciudad)
+        empleados        -> 'left' (libres, sin nomina pendiente)
+        locales          -> 'available', sin dueno y sin empresa (vuelven al mercado)
+
+    La nomina pendiente que no se haya cobrado se pierde con el negocio: por eso
+    se devuelve en `pending_paid` para que el dueno lo vea ANTES de confirmar.
+
+    Todo se escribe en una sola transaccion y el UPDATE de la empresa lleva la
+    guarda `status NOT IN ('closed','bankrupt') AND funds >= importe`, de modo
+    que un doble clic no puede devolver la caja dos veces.
+    """
+    company = await get_company(company_id, guild_id)
+    if not company:
+        raise BusinessError("La empresa ya no existe.")
+    if str(company.get("owner_id")) != str(actor_id):
+        raise BusinessError("Solo el dueno puede disolver la empresa.")
+    if (company.get("status") or "active") in BLOCKED_STATUSES:
+        raise BusinessError("Esta empresa ya esta cerrada.")
+
+    owner_id = str(company["owner_id"])
+    # Excepcion documentada igual que en `buy_company`: si el dueno es la ciudad
+    # no hay ciudadano al que pagar y el importe va a las arcas, no desaparece.
+    is_city = owner_id == CITY_OWNER_ID
+    funds = money(company.get("funds"))
+    pending_total, _ = await pending_payroll(company_id)
+    if not is_city:
+        await async_get_or_create_user(owner_id, guild_id)
+
+    batch = []
+
+    def counted(item):
+        """Encola una sentencia y devuelve el indice que ocupara en `results`.
+
+        `aexecute_atomic` solo devuelve los resultados de las sentencias que
+        piden `fetch`, asi que el indice es la posicion entre esas, no la del lote.
+        """
+        batch.append(item)
+        return sum(1 for queued in batch if queued[2]) - 1
+
+    i_company = counted((
+        """UPDATE companies SET funds=0, status='closed', status_note=$1,
+           status_changed_at=NOW(), sale_price=NULL, public_listing=FALSE, updated_at=NOW()
+           WHERE id=$2 AND guild_id=$3 AND status NOT IN ('closed','bankrupt') AND funds >= $4""",
+        ("Disuelta por su dueno", company_id, guild_id, funds),
+        "count",
+    ))
+    if funds > 0:
+        if is_city:
+            counted(_treasury_credit(guild_id, funds))
+        else:
+            counted(_cash_guard(owner_id, guild_id, funds, +1))
+        batch.append(_user_tx(
+            owner_id, guild_id, TX["company_closure"], funds,
+            f"Liquidacion de la caja de {company['name']} al disolver la empresa",
+        ))
+    i_listing = counted((
+        "UPDATE company_sales SET status='cancelled', note='Empresa disuelta' "
+        "WHERE company_id=$1 AND status='listed'",
+        (company_id,),
+        "count",
+    ))
+    # Los empleados quedan libres pero conservan su ficha, como en la venta de
+    # una empresa: si el negocio se reactiva, la plantilla sigue ahi.
+    i_members = counted((
+        """UPDATE company_members SET member_status='left', position_id=NULL, permissions='',
+           is_manager=FALSE, discord_role_id=NULL, pending_salary=0, updated_at=NOW()
+           WHERE company_id=$1 AND (member_status IS NULL OR member_status<>'left')""",
+        (company_id,),
+        "count",
+    ))
+    i_properties = counted((
+        "UPDATE properties SET status='available', owner_id=NULL, company_id=NULL,"
+        " updated_at=NOW() WHERE guild_id=$1 AND company_id=$2",
+        (guild_id, company_id),
+        "count",
+    ))
+    batch.append(_ledger_tx(
+        company, "closure", -funds, 0,
+        f"Cierre del negocio: la caja vuelve al dueno {owner_id}"
+        + (f" (nomina pendiente sin cobrar: {pending_total:,})" if pending_total else ""),
+        actor_id,
+    ))
+
+    results = await aexecute_atomic(batch)
+    if not results[i_company]:
+        raise BusinessError("La empresa ya no existe o ya estaba disuelta.")
+    return {
+        "funds": funds,
+        "owner_id": owner_id,
+        "is_city": is_city,
+        "employees_released": results[i_members] or 0,
+        "properties_released": results[i_properties] or 0,
+        "listings_cancelled": results[i_listing] or 0,
+        "pending_paid": pending_total,
     }
 
 

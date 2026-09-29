@@ -520,9 +520,14 @@ CREATE TABLE IF NOT EXISTS properties (
     rent_price NUMERIC,
     status TEXT DEFAULT 'available',
     owner_id TEXT,
+    -- Empresa a la que pertenece el local. NULL = local de un ciudadano o del
+    -- mercado. Al disolver la empresa el local vuelve al mercado.
+    company_id TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX IF NOT EXISTS idx_properties_company ON properties(company_id, status);
 
 CREATE TABLE IF NOT EXISTS property_transactions (
     id TEXT PRIMARY KEY,

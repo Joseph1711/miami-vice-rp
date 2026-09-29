@@ -37,6 +37,10 @@ logger = logging.getLogger("bot.companies")
 ACTION_COOLDOWN = 3.0
 VIEW_TIMEOUT = 180.0
 
+# `custom_id` de los botones del panel: empresa variable + accion. El template es
+# lo que registra `CompanyPanelButton` en el bot, asi que ambos deben coincidir.
+PANEL_CUSTOM_ID = r"empresa:(?P<company_id>[^:]+):(?P<action>[a-z_]+)"
+
 
 # ---------------------------------------------------------------------------
 # Utilidades
@@ -362,6 +366,80 @@ async def finish_hire(interaction: discord.Interaction, company_id: str, employe
 # ---------------------------------------------------------------------------
 
 
+class CompanyPanelButton(discord.ui.DynamicItem, template=PANEL_CUSTOM_ID):
+    """Boton del panel que sabe a que empresa y a que accion pertenece.
+
+    Antes esto era un `discord.ui.Button` pelado: `Button` sin callback propio
+    cae en el no-op de `Item.callback`, asi que el panel se ve bien pero todos
+    sus botones son inertes. Ademas el `custom_id` lleva el id de la empresa, que
+    cambia en cada invocacion, y `bot.add_view` registra por coincidencia exacta
+    de `custom_id`, no por patron: un boton normal solo valdría para la empresa
+    concreta con la que se construyó la vista.
+
+    Como `DynamicItem`, discord.py registra la CLASE en `bot._dynamic_items` y
+    despacha cualquier `custom_id` que case con el template, sin depender del
+    mensaje ni de la vista que lo contiene. Por eso los botones sobreviven a un
+    reinicio y funcionan en el panel de cualquier empresa.
+    """
+
+    def __init__(self, company_id: str, action: str, label: str, emoji, style, row=None):
+        super().__init__(
+            discord.ui.Button(label=label, emoji=emoji, style=style,
+                              custom_id=f"empresa:{company_id}:{action}"),
+            row=row,
+        )
+        self.company_id = company_id
+        self.action = action
+
+    @classmethod
+    def from_custom_id(cls, interaction, item, match):
+        """Reconstruye el boton a partir del `custom_id` que llega del click.
+
+        `item` es el boton real que se pinto en el mensaje, asi que se reutiliza
+        su etiqueta, emoji y estilo; lo unico que no se puede leer de el es a que
+        empresa y a que accion apunta, y eso se saca del `match` del template.
+        """
+        return cls(
+            company_id=match["company_id"],
+            action=match["action"],
+            label=getattr(item, "label", None) or match["action"],
+            emoji=getattr(item, "emoji", None),
+            style=getattr(item, "style", discord.ButtonStyle.secondary),
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        viewer = CompanyContext.viewer_of(self.company_id)
+        if viewer and str(interaction.user.id) != viewer:
+            await _deny(interaction, "Panel ajeno", "Usa `/empresa panel` para abrir el tuyo.")
+            return
+        if not await _guard(interaction, f"panel:{self.action}"):
+            return
+        await handle_panel_button(interaction.client, interaction, self.company_id, self.action)
+
+
+# Botones del panel: (accion, etiqueta, emoji, estilo). El orden es el que ve
+# el usuario y se reparte solo en filas por el limite de 5 de Discord.
+PANEL_BUTTONS = (
+    ("deposit", "Aportar capital", "\U0001F4E6", discord.ButtonStyle.success),
+    ("withdraw", "Retirar", "\U0001F4B8", discord.ButtonStyle.danger),
+    ("expense", "Gasto", "\U0001F6D2", discord.ButtonStyle.secondary),
+    ("payroll", "Nómina", "\U0001F4B0", discord.ButtonStyle.primary),
+    ("menu", "Menú", "\U0001F372", discord.ButtonStyle.secondary),
+    ("positions", "Puestos", "\U0001F9D9", discord.ButtonStyle.secondary),
+    ("finance", "Finanzas", "\U0001F4CA", discord.ButtonStyle.secondary),
+    ("hire", "Contratar", "➕", discord.ButtonStyle.success),
+    ("dissolve", "Disolver", "\U0001F6D1", discord.ButtonStyle.danger),
+)
+
+# Confirmacion de la disolucion. Son los mismos `CompanyPanelButton`: el template
+# `empresa:<empresa>:<accion>` no distingue acciones, asi que estos botones tambien
+# sobreviven al reinicio sin vistas Alive.
+DISSOLVE_ACTIONS = (
+    ("dissolve_confirm", "Sí, disolver", "\U0001F6D1", discord.ButtonStyle.danger),
+    ("dissolve_cancel", "Cancelar", "↩️", discord.ButtonStyle.secondary),
+)
+
+
 class CompanyPanelView(discord.ui.View):
     """Panel principal: botones que abren modales, todos con control de permisos."""
 
@@ -369,30 +447,8 @@ class CompanyPanelView(discord.ui.View):
         super().__init__(timeout=timeout)
         self.company_id = company_id
         self.viewer_id = viewer_id
-        self.add_item(discord.ui.Button(label="Aportar capital", emoji="\U0001F4E6",
-                                        style=discord.ButtonStyle.success,
-                                        custom_id=f"empresa:{company_id}:deposit"))
-        self.add_item(discord.ui.Button(label="Retirar", emoji="\U0001F4B8",
-                                        style=discord.ButtonStyle.danger,
-                                        custom_id=f"empresa:{company_id}:withdraw"))
-        self.add_item(discord.ui.Button(label="Gasto", emoji="\U0001F6D2",
-                                        style=discord.ButtonStyle.secondary,
-                                        custom_id=f"empresa:{company_id}:expense"))
-        self.add_item(discord.ui.Button(label="Nómina", emoji="\U0001F4B0",
-                                        style=discord.ButtonStyle.primary,
-                                        custom_id=f"empresa:{company_id}:payroll"))
-        self.add_item(discord.ui.Button(label="Menú", emoji="\U0001F372",
-                                        style=discord.ButtonStyle.secondary,
-                                        custom_id=f"empresa:{company_id}:menu"))
-        self.add_item(discord.ui.Button(label="Puestos", emoji="\U0001F9D9",
-                                        style=discord.ButtonStyle.secondary,
-                                        custom_id=f"empresa:{company_id}:positions"))
-        self.add_item(discord.ui.Button(label="Finanzas", emoji="\U0001F4CA",
-                                        style=discord.ButtonStyle.secondary,
-                                        custom_id=f"empresa:{company_id}:finance"))
-        self.add_item(discord.ui.Button(label="Contratar", emoji="➕",
-                                        style=discord.ButtonStyle.success,
-                                        custom_id=f"empresa:{company_id}:hire"))
+        for action, label, emoji, style in PANEL_BUTTONS:
+            self.add_item(CompanyPanelButton(company_id, action, label, emoji, style))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if str(interaction.user.id) == self.viewer_id:
@@ -401,6 +457,22 @@ class CompanyPanelView(discord.ui.View):
             embed=error_embed("Panel ajeno", "Usa `/empresa panel` para abrir el tuyo."),
             ephemeral=True)
         return False
+
+
+class CompanyDissolveView(discord.ui.View):
+    """Confirmacion de la disolucion de una empresa.
+
+    Va en efimero y sus botones son `CompanyPanelButton`, asi que el dispatch por
+    patron los encuentra aunque esta vista ya haya caducado o el bot se haya
+    reiniciado entre la pregunta y la respuesta.
+    """
+
+    def __init__(self, company_id: str, viewer_id: str, timeout: float = VIEW_TIMEOUT):
+        super().__init__(timeout=timeout)
+        self.company_id = company_id
+        self.viewer_id = viewer_id
+        for action, label, emoji, style in DISSOLVE_ACTIONS:
+            self.add_item(CompanyPanelButton(company_id, action, label, emoji, style))
 
 
 class CatalogBuyView(discord.ui.View):
@@ -507,7 +579,13 @@ class Companies(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        """Los botones del panel sobreviven a reinicios gracias a este router."""
+        """Los botones del panel sobreviven a reinicios gracias a este router.
+
+        `add_view` con una vista de `DynamicItem` registra la CLASE por patron
+        en `bot._dynamic_items`, no cada `custom_id` por separado. Por eso una
+        sola vista vacia basta para que responded todos los paneles, incluidos
+        los que se enviaron antes del reinicio.
+        """
         self.bot.add_view(CompanyPanelRouter())
 
     empresa = app_commands.Group(
@@ -1179,67 +1257,20 @@ class CompanyPanelRouter(discord.ui.View):
     """Router permanente de los botones del panel.
 
     Vive en el bot para que los botones sigan funcionando aunque el panel se
-    haya enviado hace horas. El `custom_id` es `empresa:<empresa>:<accion>`.
+    haya enviado hace horas o el bot se haya reiniciado. No lleva botones: al
+    inicializarse sin items, `bot.add_view` recorre sus hijos, encuentra el
+    `DynamicItem` y registra su CLASE en `bot._dynamic_items`, que es lo que
+    despacha por patron (`empresa:<empresa>:<accion>`) en vez de por
+    `custom_id` exacto.
     """
 
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(
-        label="Aportar capital", emoji="\U0001F4E6", style=discord.ButtonStyle.success,
-        custom_id="empresa_panel:deposit",
-    )
-    async def btn_deposit(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "deposit")
-
-    @discord.ui.button(
-        label="Retirar", emoji="\U0001F4B8", style=discord.ButtonStyle.danger,
-        custom_id="empresa_panel:withdraw",
-    )
-    async def btn_withdraw(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "withdraw")
-
-    @discord.ui.button(
-        label="Gasto", emoji="\U0001F6D2", style=discord.ButtonStyle.secondary,
-        custom_id="empresa_panel:expense",
-    )
-    async def btn_expense(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "expense")
-
-    @discord.ui.button(
-        label="Nómina", emoji="\U0001F4B0", style=discord.ButtonStyle.primary,
-        custom_id="empresa_panel:payroll",
-    )
-    async def btn_payroll(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "payroll")
-
-    @discord.ui.button(
-        label="Menú", emoji="\U0001F372", style=discord.ButtonStyle.secondary,
-        custom_id="empresa_panel:menu",
-    )
-    async def btn_menu(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "menu")
-
-    @discord.ui.button(
-        label="Puestos", emoji="\U0001F9D9", style=discord.ButtonStyle.secondary,
-        custom_id="empresa_panel:positions",
-    )
-    async def btn_positions(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "positions")
-
-    @discord.ui.button(
-        label="Finanzas", emoji="\U0001F4CA", style=discord.ButtonStyle.secondary,
-        custom_id="empresa_panel:finance",
-    )
-    async def btn_finance(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "finance")
-
-    @discord.ui.button(
-        label="Contratar", emoji="➕", style=discord.ButtonStyle.success,
-        custom_id="empresa_panel:hire",
-    )
-    async def btn_hire(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await _route(interaction, "hire")
+        # Item de plantilla: solo sirve para que `add_view` aprenda la clase. El
+        # `custom_id` es un relleno porque el dispatch real lo reconstruye desde
+        # el que llega en la interaccion.
+        self.add_item(CompanyPanelButton("0", "deposit", "Panel", None,
+                                         discord.ButtonStyle.secondary))
 
 
 class CompanyContext:
@@ -1259,22 +1290,7 @@ class CompanyContext:
         return cls._last_viewer.get(company_id)
 
 
-async def _route(interaction: discord.Interaction, action: str):
-    """Traduce un boton del router a la accion correspondiente."""
-    data = getattr(interaction.message, "components", None) or []
-    company_id = None
-    for row in data:
-        for component in getattr(row, "children", []):
-            cid = getattr(component, "custom_id", "") or ""
-            if cid.startswith("empresa:"):
-                company_id = cid.split(":")[1]
-                break
-        if company_id:
-            break
-    if not company_id:
-        await _deny(interaction, "Panel caducado", "Usa `/empresa panel` para abrir uno nuevo.")
-        return
-    await handle_panel_button(interaction.client, interaction, company_id, action)
+
 
 
 async def send_panel(interaction, company):
@@ -1310,6 +1326,11 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
     elif action == "hire":
         if not await B.require_access(interaction, company_id, permission="hire"):
             return
+    elif action in ("dissolve", "dissolve_confirm", "dissolve_cancel"):
+        # Disolver la empresa es decision del dueno y punto: no hay permiso que
+        # lo delegue en gerente ni en empleado.
+        if not await B.require_access(interaction, company_id, owner_only=True):
+            return
     else:
         await _deny(interaction, "Acción desconocida", action)
         return
@@ -1336,6 +1357,17 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
         return
     if action == "finance":
         await _finance_from_button(interaction, company)
+        return
+    if action == "dissolve":
+        await _dissolve_from_button(interaction, company)
+        return
+    if action == "dissolve_cancel":
+        await interaction.response.send_message(
+            embed=info_embed("Disolución cancelada", "Tu empresa sigue como estaba."),
+            ephemeral=True)
+        return
+    if action == "dissolve_confirm":
+        await _dissolve_confirm(interaction, company)
 
 
 async def _payroll_from_button(interaction, company):
@@ -1388,6 +1420,105 @@ async def _finance_from_button(interaction, company):
     entries = await B.company_ledger(company["id"], limit=20)
     await interaction.followup.send(
         embed=UI.ledger_embed(entries, B.money(company.get("funds"))), ephemeral=True)
+
+
+async def _dissolve_from_button(interaction, company):
+    """Pide confirmacion antes de disolver, con las cifras que se van a ver."""
+    if (company.get("status") or "active") in B.BLOCKED_STATUSES:
+        await interaction.response.send_message(
+            embed=error_embed("No se puede disolver",
+                              f"**{company.get('name')}** ya está en estado "
+                              f"**{B.COMPANY_STATUS[company['status']]['label'].lower()}**."),
+            ephemeral=True)
+        return
+
+    await interaction.response.defer(ephemeral=True)
+    guild_id = str(interaction.guild_id)
+    funds = B.money(company.get("funds"))
+    pending_total, pending_lines = await B.pending_payroll(company["id"])
+    employees = await B.company_employees(company["id"])
+    properties = await B.company_properties(guild_id, company["id"])
+
+    embed = warning_embed(
+        f"¿Disolver **{company.get('name')}**?",
+        "La empresa se cierra y **no** se borra: el historial, el menú, los "
+        "puestos y la configuración se conservan por si algún día la reactivas.\n\n"
+        "*No se puede deshacer: la caja no vuelve a la empresa.*",
+    )
+    embed.add_field(name="Tu caja", value=f"**{UI.money(funds)}** vuelve a tu bolsillo.",
+                    inline=False)
+    if pending_total:
+        nombres = ", ".join(
+            f"<@{line['member']['discord_id']}> {UI.money(line['amount'])}"
+            for line in pending_lines[:10]
+        )
+        embed.add_field(
+            name="Nómina sin cobrar",
+            value=f"⚠️ **{UI.money(pending_total)}** pendientes se pierden con la empresa "
+                  f"({nombres}). Paga la nómina antes de disolver si quieres pagarla.",
+            inline=False,
+        )
+    if properties:
+        locales = ", ".join(str(p.get("name")) for p in properties[:10])
+        embed.add_field(
+            name="Locales",
+            value=f"{len(properties)} vuelven al mercado de venta: {locales}",
+            inline=False,
+        )
+    else:
+        embed.add_field(name="Locales", value="Esta empresa no tiene locales.", inline=False)
+    if employees:
+        embed.add_field(
+            name="Plantilla",
+            value=f"{len(employees)} personas quedan libres y conservan su ficha.",
+            inline=False,
+        )
+    await interaction.followup.send(
+        embed=embed,
+        view=CompanyDissolveView(company["id"], str(interaction.user.id)),
+        ephemeral=True,
+    )
+
+
+async def _dissolve_confirm(interaction, company):
+    """Ejecuta la disolucion y quita los roles de empresa de la plantilla."""
+    await interaction.response.defer(ephemeral=True)
+    guild_id = str(interaction.guild_id)
+    actor_id = str(interaction.user.id)
+    employees = await B.company_employees(company["id"])
+    try:
+        result = await B.dissolve_company(guild_id, company["id"], actor_id)
+    except Exception as error:
+        await _report(interaction, error)
+        return
+
+    # La plantilla queda libre: sus roles de empresa dejan de tener sentido.
+    for row in employees:
+        try:
+            member = interaction.guild.get_member(int(row["discord_id"]))
+        except (TypeError, ValueError):
+            member = None
+        if member:
+            await _remove_role(interaction.guild, member, row)
+
+    destino = ("la Tesorería Municipal" if result["is_city"]
+               else f"tu bolsillo (<@{result['owner_id']}>)")
+    embed = success_embed(
+        f"**{company.get('name')}** ha sido disuelta",
+        f"La caja de **{UI.money(result['funds'])}** ha vuelto a {destino}.",
+    )
+    details = [
+        f"**{result['employees_released']}** empleados libres.",
+        f"**{result['properties_released']}** locales de vuelta al mercado."
+        if result["properties_released"] else "La empresa no tenía locales.",
+    ]
+    if result["listings_cancelled"]:
+        details.append("Anuncio de venta retirado.")
+    if result["pending_paid"]:
+        details.append(
+            f"Nómina sin cobrar perdida: **{UI.money(result['pending_paid'])}**.")
+    embed.add_field(name="Detalle", value="\n".join(f"• {line}" for line in details), inline=False)
+    await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def _remove_role(guild, member, left_row):

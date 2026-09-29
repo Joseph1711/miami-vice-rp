@@ -195,6 +195,8 @@ def _pg_migration_statements() -> list:
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_note TEXT DEFAULT 'Made By Joshi'",
         "ALTER TABLE department_members ADD COLUMN IF NOT EXISTS username TEXT",
         "ALTER TABLE company_members ADD COLUMN IF NOT EXISTS username TEXT",
+        "ALTER TABLE properties ADD COLUMN IF NOT EXISTS company_id TEXT",
+        "CREATE INDEX IF NOT EXISTS idx_properties_company ON properties(company_id, status)",
         "ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS occupation TEXT DEFAULT 'Ciudadano'",
         "ALTER TABLE dni_records ADD COLUMN IF NOT EXISTS age INTEGER DEFAULT 18",
         "ALTER TABLE weapon_registries ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
@@ -722,6 +724,22 @@ def _ensure_schema_migrations(conn):
             existing_cm = {row[1] for row in cursor_cm.fetchall()}
             if "username" not in existing_cm and len(existing_cm) > 0:
                 conn.execute("ALTER TABLE company_members ADD COLUMN username TEXT")
+
+            # properties check: vinculo con la empresa duena del local
+            _sqlite_add_missing_columns(
+                conn,
+                "properties",
+                [
+                    ("company_id", "TEXT"),
+                ],
+            )
+            try:
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_properties_company "
+                    "ON properties(company_id, status)"
+                )
+            except sqlite3.Error as index_error:
+                logger.debug("[DB] Indice de properties omitido: %s", index_error)
 
             _sqlite_add_missing_columns(
                 conn,
