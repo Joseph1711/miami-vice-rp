@@ -3,6 +3,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.embeds import info_embed
+from bot.helpers import safe_emoji
 
 EMBED_MAX_FIELDS = 25  # limite duro de Discord por embed
 
@@ -321,7 +322,9 @@ class HelpCategorySelect(discord.ui.Select):
             discord.SelectOption(
                 label=data["label"],
                 value=key,
-                emoji=data["emoji"],
+                # `safe_emoji` deja cada categoria en su forma fully-qualified:
+                # sin el, un solo emoji mal escrito tumba el /ayuda entero.
+                emoji=safe_emoji(data["emoji"]),
                 description=f"Comandos de {data['label'].lower()}"[:100]
             )
             for key, data in HELP_CATEGORIES.items()

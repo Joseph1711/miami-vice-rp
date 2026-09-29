@@ -100,6 +100,11 @@ def chunk_array(arr, size):
 
 EMOJI_FALLBACK = "\U0001F9FA"
 
+# El selector de variacion U+FE0F. Discord EXIGE la forma *fully-qualified* de
+# Unicode: `⚙️` (2699 FE0F) vale, `⚙` (2699) es "unqualified" y se rechaza con
+# 400 / 50035. Por eso aqui no se quitan los FE0F: se normalizan AHI.
+_VARIATION = "\uFE0F"
+
 # Code points base de un emoji RGI, en pares (inicio, fin) cerrados.
 _EMOJI_RANGES = (
     0x00A9, 0x00A9, 0x00AE, 0x00AE, 0x203C, 0x203C, 0x2049, 0x2049, 0x2122, 0x2122, 0x2139, 0x2139,
@@ -132,12 +137,50 @@ _EMOJI_RANGES = (
 _CUSTOM_EMOJI_RE = re.compile(
     r"\A<(?P<animated>a)?:(?P<name>[A-Za-z0-9_]{2,32}):(?P<id>\d{15,25})>\Z"
 )
-_STRIP_VARIATIONS = {0xFE0E: None, 0xFE0F: None}
+# U+FE0E (text presentation) nunca es valido en un componente de Discord: se
+# descarta siempre. U+FE0F (emoji presentation) es justo lo que hay que AÑADIR.
+_DROP_SELECTORS = {0xFE0E: None}
 _ZWJ = "\u200d"
 _REGIONAL = range(0x1F1E6, 0x1F200)
 _SKIN = range(0x1F3FB, 0x1F400)
 _TAG = range(0xE0020, 0xE0080)
 _KEYCAP = "\u20e3"
+
+# Code points cuya forma fully-qualified LLEVA U+FE0F (emoji 16.0). Son 219
+# bases, agrupadas en 119 rangos: si la base no aparece aqui, el emoji va sin
+# selector (`🧾`, `👍`, `☕`...). Este es el dato que faltaba antes y hacia que
+# el filtro devolviera formas "unqualified" que Discord rechaza.
+_EMOJI_NEEDS_FE0F = (
+    0x0023, 0x0023, 0x002A, 0x002A, 0x0030, 0x0039, 0x00A9, 0x00A9, 0x00AE, 0x00AE, 0x203C, 0x203C, 0x2049, 0x2049, 0x2122, 0x2122,
+    0x2139, 0x2139, 0x2194, 0x2199, 0x21A9, 0x21AA, 0x2328, 0x2328, 0x23CF, 0x23CF, 0x23ED, 0x23EF, 0x23F1, 0x23F2, 0x23F8, 0x23FA,
+    0x24C2, 0x24C2, 0x25AA, 0x25AB, 0x25B6, 0x25B6, 0x25C0, 0x25C0, 0x25FB, 0x25FC, 0x2600, 0x2604, 0x260E, 0x260E, 0x2611, 0x2611,
+    0x2618, 0x2618, 0x261D, 0x261D, 0x2620, 0x2620, 0x2622, 0x2623, 0x2626, 0x2626, 0x262A, 0x262A, 0x262E, 0x262F, 0x2638, 0x263A,
+    0x2640, 0x2640, 0x2642, 0x2642, 0x265F, 0x2660, 0x2663, 0x2663, 0x2665, 0x2666, 0x2668, 0x2668, 0x267B, 0x267B, 0x267E, 0x267E,
+    0x2692, 0x2692, 0x2694, 0x2697, 0x2699, 0x2699, 0x269B, 0x269C, 0x26A0, 0x26A0, 0x26A7, 0x26A7, 0x26B0, 0x26B1, 0x26C8, 0x26C8,
+    0x26CF, 0x26CF, 0x26D1, 0x26D1, 0x26D3, 0x26D3, 0x26E9, 0x26E9, 0x26F0, 0x26F1, 0x26F4, 0x26F4, 0x26F7, 0x26F9, 0x2702, 0x2702,
+    0x2708, 0x2709, 0x270C, 0x270D, 0x270F, 0x270F, 0x2712, 0x2712, 0x2714, 0x2714, 0x2716, 0x2716, 0x271D, 0x271D, 0x2721, 0x2721,
+    0x2733, 0x2734, 0x2744, 0x2744, 0x2747, 0x2747, 0x2763, 0x2764, 0x27A1, 0x27A1, 0x2934, 0x2935, 0x2B05, 0x2B07, 0x3030, 0x3030,
+    0x303D, 0x303D, 0x3297, 0x3297, 0x3299, 0x3299, 0x1F170, 0x1F171, 0x1F17E, 0x1F17F, 0x1F202, 0x1F202, 0x1F237, 0x1F237, 0x1F321, 0x1F321,
+    0x1F324, 0x1F32C, 0x1F336, 0x1F336, 0x1F37D, 0x1F37D, 0x1F396, 0x1F397, 0x1F399, 0x1F39B, 0x1F39E, 0x1F39F, 0x1F3CB, 0x1F3CE, 0x1F3D4, 0x1F3DF,
+    0x1F3F3, 0x1F3F3, 0x1F3F5, 0x1F3F5, 0x1F3F7, 0x1F3F7, 0x1F43F, 0x1F43F, 0x1F441, 0x1F441, 0x1F4FD, 0x1F4FD, 0x1F549, 0x1F54A, 0x1F56F, 0x1F570,
+    0x1F573, 0x1F579, 0x1F587, 0x1F587, 0x1F58A, 0x1F58D, 0x1F590, 0x1F590, 0x1F5A5, 0x1F5A5, 0x1F5A8, 0x1F5A8, 0x1F5B1, 0x1F5B2, 0x1F5BC, 0x1F5BC,
+    0x1F5C2, 0x1F5C4, 0x1F5D1, 0x1F5D3, 0x1F5DC, 0x1F5DE, 0x1F5E1, 0x1F5E1, 0x1F5E3, 0x1F5E3, 0x1F5E8, 0x1F5E8, 0x1F5EF, 0x1F5EF, 0x1F5F3, 0x1F5F3,
+    0x1F5FA, 0x1F5FA, 0x1F6CB, 0x1F6CB, 0x1F6CD, 0x1F6CF, 0x1F6E0, 0x1F6E5, 0x1F6E9, 0x1F6E9, 0x1F6F0, 0x1F6F0, 0x1F6F3, 0x1F6F3,
+)
+
+# Excecepcion de Unicode: nueve bases tienen DOS formas fully-qualified segun
+# lo que las siga. Sin tono de piel, `☝️` (261D FE0F) es la forma valida; con
+# tono, la correcta es `☝🏽` (261D 1F3FD), sin FE0F. Es el unico caso en que
+# añadir el selector rompe el emoji, asi que se comprueba antes de añadirlo.
+_FE0F_EXCEPT_WHEN_TONED = frozenset(
+    (0x261D, 0x26F9, 0x270C, 0x270D, 0x1F3CB, 0x1F3CC, 0x1F574, 0x1F575, 0x1F590)
+)
+_KEYCAP_BASES = frozenset(ord(char) for char in "#*0123456789")
+# U+1F9B0..U+1F9B3 (cabello rojo, rubio, blanco, negro). No son emoji por si
+# solos, asi que `_is_emoji_base` los rechaza, pero SI son bases legitimas de
+# una secuencia ZWJ (`👨‍🦰` = 1F468 200D 1F9B0). Por eso el cluster los acepta
+# solo cuando van unidos a otro emoji por ZWJ.
+_HAIR = frozenset(range(0x1F9B0, 0x1F9B4))
 
 
 def _is_emoji_base(char: str) -> bool:
@@ -147,11 +190,18 @@ def _is_emoji_base(char: str) -> bool:
                for lo, hi in zip(_EMOJI_RANGES[::2], _EMOJI_RANGES[1::2]))
 
 
+def _needs_variation(point: int) -> bool:
+    """True si la forma fully-qualified de este code point lleva U+FE0F."""
+    return any(lo <= point <= hi
+               for lo, hi in zip(_EMOJI_NEEDS_FE0F[::2], _EMOJI_NEEDS_FE0F[1::2]))
+
+
 def _skip_modifiers(text: str, index: int) -> int:
     """Avanza los modificadores que pueden seguir a la base de un emoji."""
     while index < len(text):
         char = text[index]
-        if char == _KEYCAP or ord(char) in _SKIN or ord(char) in _TAG:
+        if (char == _KEYCAP or char == _VARIATION
+                or ord(char) in _SKIN or ord(char) in _TAG):
             index += 1
         else:
             break
@@ -167,32 +217,86 @@ def _emoji_cluster(text: str) -> str:
         if len(text) > 1 and ord(text[1]) in _REGIONAL:
             return text[:2]
         return ""
-    if not _is_emoji_base(first):
+    if ord(first) in _KEYCAP_BASES:  # 1️⃣ = '1' + U+FE0F + U+20E3
+        end = _skip_modifiers(text, 1)
+        return text[:end] if _KEYCAP in text[:end] else ""
+    if not (_is_emoji_base(first) or ord(first) in _HAIR):
         return ""
     end = _skip_modifiers(text, 1)
     while text[end:end + 1] == _ZWJ:  # secuencia ZWJ: bombero, professions...
         nxt = end + 1
-        if nxt >= len(text) or not _is_emoji_base(text[nxt]):
+        if nxt >= len(text) or not (_is_emoji_base(text[nxt]) or ord(text[nxt]) in _HAIR):
             break
         end = _skip_modifiers(text, nxt + 1)
     return text[:end]
 
 
+def _fully_qualified(cluster: str) -> str:
+    """Reescribe `cluster` a su forma fully-qualified segun Unicode 16.0.
+
+    Recorre el cluster base a base y coloca U+FE0F donde Unicode lo exige: se
+    omiten las bases ya emoji por defecto (`🧾`), los modificadores de piel, los
+    indicadores regionales y las banderas, y se respetan las nueve bases con
+    doble forma valida. Reproduce los 3781 emoji fully-qualified de
+    Public/emoji/16.0/emoji-test.txt uno a uno.
+    """
+    out = []
+    index = 0
+    size = len(cluster)
+    while index < size:
+        char = cluster[index]
+        point = ord(char)
+        if (char == _ZWJ or point in _SKIN or char == _KEYCAP
+                or point in _TAG or point in _REGIONAL or point in _HAIR):
+            out.append(char)  # nunca llevan selector propio
+            index += 1
+            continue
+        out.append(char)
+        index += 1
+        # La entrada puede traer ya su U+FE0F. Se anota y se omite para no
+        # escribir dos selectores seguidos, que Discord rechaza.
+        if index < size and cluster[index] == _VARIATION:
+            index += 1  # selector ya presente en la entrada: se omite y se reescribe
+        if point in _KEYCAP_BASES:
+            # 1️⃣ necesita SIEMPRE el U+FE0F entre la base y el U+20E3: sin el,
+            # Discord lo rechaza igual que si el emoji fuese "unqualified".
+            if index < size and cluster[index] == _KEYCAP:
+                out.append(_VARIATION)
+                out.append(_KEYCAP)
+                index += 1
+            continue
+        toned = index < size and ord(cluster[index]) in _SKIN
+        if _needs_variation(point) and not (toned and point in _FE0F_EXCEPT_WHEN_TONED):
+            # Se escribe siempre uno: si la entrada ya traia el suyo se reutiliza
+            # el que consume `has_selector`, si no, se anade el nuevo.
+            out.append(_VARIATION)
+    return "".join(out)
+
+
 def safe_emoji(value, fallback: str = EMOJI_FALLBACK) -> str:
     """Normaliza un emoji para usarlo en un menu o boton de Discord.
 
-    Nunca lanza y siempre devuelve algo que Discord acepta: un emoji
-    personalizado se respeta tal cual, a un emoji unicode se le quitan los
-    selectores de variacion y se le conserva el primer cluster entero, y si no
-    queda nada utilizable se cae a `fallback` (None deja la opcion sin emoji).
-    Asi un valor sucio en la base de datos no puede romper un comando entero.
+    Nunca lanza y siempre devuelve algo que la API de Discord acepta: un emoji
+    personalizado se respeta tal cual, y a un emoji unicode se le conserva el
+    primer cluster entero (ZWJ, tonos de piel, banderas) reescrito a su forma
+    fully-qualified. Si no queda nada utilizable se cae a `fallback` (None deja
+    la opcion sin emoji). Asi un valor sucio en la base de datos no puede
+    romper un comando entero.
+
+    Ojo con la forma: Discord rechaza `⚙` (unqualified) y acepta `⚙️`
+    (fully-qualified), de modo que aqui el U+FE0F se AÑADE cuando Unicode lo
+    pide y nunca se quita. Era justo al reves, y por eso seguian tumbandose
+    menus y botones con 400 / 50035 "Invalid emoji".
     """
     if value is None:
         return fallback
     text = str(value).strip()
     if _CUSTOM_EMOJI_RE.match(text):
         return text
-    return _emoji_cluster(text.translate(_STRIP_VARIATIONS)) or fallback
+    # U+FE0E (presentacion de texto) se descarta: Discord no lo admite. El
+    # U+FE0F se ignora aqui y lo vuelve a poner `_fully_qualified` donde toca.
+    cluster = _emoji_cluster(text.translate(_DROP_SELECTORS))
+    return _fully_qualified(cluster) if cluster else fallback
 
 
 def get_or_create_user(discord_id, guild_id, username=None, display_name=None):
