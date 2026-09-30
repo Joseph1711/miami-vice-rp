@@ -1462,7 +1462,7 @@ async def dissolve_company(guild_id: str, company_id: str, actor_id: str):
         piden `fetch`, asi que el indice es la posicion entre esas, no la del lote.
         """
         batch.append(item)
-        return sum(1 for queued in batch if queued[2]) - 1
+        return sum(1 for queued in batch if len(queued) > 2 and queued[2]) - 1
 
     i_company = counted((
         """UPDATE companies SET funds=0, status='closed', status_note=$1,
@@ -1473,9 +1473,9 @@ async def dissolve_company(guild_id: str, company_id: str, actor_id: str):
     ))
     if funds > 0:
         if is_city:
-            counted(_treasury_credit(guild_id, funds))
+            batch.append(_treasury_credit(guild_id, funds))
         else:
-            counted(_cash_guard(owner_id, guild_id, funds, +1))
+            batch.append(_cash_guard(owner_id, guild_id, funds, +1))
         batch.append(_user_tx(
             owner_id, guild_id, TX["company_closure"], funds,
             f"Liquidacion de la caja de {company['name']} al disolver la empresa",
@@ -1509,15 +1509,15 @@ async def dissolve_company(guild_id: str, company_id: str, actor_id: str):
     ))
 
     results = await aexecute_atomic(batch)
-    if not results[i_company]:
+    if not results or not results[i_company]:
         raise BusinessError("La empresa ya no existe o ya estaba disuelta.")
     return {
         "funds": funds,
         "owner_id": owner_id,
         "is_city": is_city,
-        "employees_released": results[i_members] or 0,
-        "properties_released": results[i_properties] or 0,
-        "listings_cancelled": results[i_listing] or 0,
+        "employees_released": results[i_members] if (i_members is not None and i_members < len(results) and results[i_members]) else 0,
+        "properties_released": results[i_properties] if (i_properties is not None and i_properties < len(results) and results[i_properties]) else 0,
+        "listings_cancelled": results[i_listing] if (i_listing is not None and i_listing < len(results) and results[i_listing]) else 0,
         "pending_paid": pending_total,
     }
 

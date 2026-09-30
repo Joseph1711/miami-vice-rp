@@ -471,10 +471,18 @@ class CompanyDissolveView(discord.ui.View):
 
     def __init__(self, company_id: str, viewer_id: str, timeout: float = None):
         super().__init__(timeout=None)
-        self.company_id = company_id
-        self.viewer_id = viewer_id
+        self.company_id = str(company_id)
+        self.viewer_id = str(viewer_id)
         for action, label, emoji, style in DISSOLVE_ACTIONS:
-            self.add_item(CompanyPanelButton(company_id, action, label, emoji, style))
+            self.add_item(CompanyPanelButton(str(company_id), action, label, emoji, style))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if str(interaction.user.id) == self.viewer_id:
+            return True
+        await interaction.response.send_message(
+            embed=error_embed("Acción denegada", "Solo quien inició la disolución puede confirmarla."),
+            ephemeral=True)
+        return False
 
 
 class CatalogBuyView(discord.ui.View):
@@ -652,6 +660,23 @@ class Companies(commands.Cog):
                 ephemeral=True)
             return
         await send_panel(interaction, company)
+
+    @empresa.command(name="disolver", description="Disolver tu empresa y recuperar su caja")
+    @app_commands.describe(empresa="Nombre de la empresa (si no la indicas, la tuya)")
+    async def disolver(self, interaction: discord.Interaction, empresa: str = None):
+        await interaction.response.defer(ephemeral=True)
+        company = await _resolve_company(interaction, empresa)
+        if not company:
+            await interaction.followup.send(
+                embed=error_embed("Empresa no encontrada", "No se encontró la empresa indicada."),
+                ephemeral=True)
+            return
+        if str(company.get("owner_id")) != str(interaction.user.id):
+            await interaction.followup.send(
+                embed=error_embed("Solo el dueño", "Solo el propietario puede disolver esta empresa."),
+                ephemeral=True)
+            return
+        await _dissolve_from_button(interaction, company)
 
     @empresa.command(name="info", description="Ficha publica de una empresa")
     @app_commands.describe(empresa="Nombre de la empresa")
@@ -1291,11 +1316,11 @@ class CompanyContext:
 
     @classmethod
     def remember(cls, company_id: str, viewer_id: str):
-        cls._last_viewer[company_id] = viewer_id
+        cls._last_viewer[str(company_id)] = str(viewer_id)
 
     @classmethod
     def viewer_of(cls, company_id: str):
-        return cls._last_viewer.get(company_id)
+        return cls._last_viewer.get(str(company_id))
 
 
 
@@ -1363,25 +1388,30 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
         await _deny(interaction, "Acción desconocida", action)
         return
 
-    if action == "payroll":
-        await _payroll_from_button(interaction, company)
-        return
-    if action == "hire":
-        await _hire_from_button(interaction, company)
-        return
-    if action == "finance":
-        await _finance_from_button(interaction, company)
-        return
-    if action == "dissolve":
-        await _dissolve_from_button(interaction, company)
-        return
-    if action == "dissolve_cancel":
-        await interaction.followup.send(
-            embed=info_embed("Disolución cancelada", "Tu empresa sigue como estaba."),
-            ephemeral=True)
-        return
-    if action == "dissolve_confirm":
-        await _dissolve_confirm(interaction, company)
+    try:
+        if action == "payroll":
+            await _payroll_from_button(interaction, company)
+            return
+        if action == "hire":
+            await _hire_from_button(interaction, company)
+            return
+        if action == "finance":
+            await _finance_from_button(interaction, company)
+            return
+        if action == "dissolve":
+            await _dissolve_from_button(interaction, company)
+            return
+        if action == "dissolve_cancel":
+            await interaction.followup.send(
+                embed=info_embed("Disolución cancelada", "Tu empresa sigue como estaba."),
+                ephemeral=True)
+            return
+        if action == "dissolve_confirm":
+            await _dissolve_confirm(interaction, company)
+            return
+    except Exception as error:
+        logger.error("Error al procesar acción %s en empresa %s: %s", action, company_id, error, exc_info=True)
+        await _report(interaction, error)
 
 
 async def _payroll_from_button(interaction, company):
@@ -1453,70 +1483,79 @@ async def _dissolve_from_button(interaction, company):
     """Pide confirmacion antes de disolver, con las cifras que se van a ver."""
     if not interaction.response.is_done():
         await interaction.response.defer(ephemeral=True)
-    if (company.get("status") or "active") in B.BLOCKED_STATUSES:
+    try:
+        status_key = company.get("status") or "active"
+        if status_key in B.BLOCKED_STATUSES:
+            status_label = B.COMPANY_STATUS.get(status_key, {}).get("label", status_key)
+            await interaction.followup.send(
+                embed=error_embed("No se puede disolver",
+                                  f"**{company.get('name')}** ya está en estado **{status_label.lower()}**."),
+                ephemeral=True)
+            return
+
+        guild_id = str(interaction.guild_id)
+        funds = B.money(company.get("funds"))
+        pending_total, pending_lines = await B.pending_payroll(company["id"])
+        employees = await B.company_employees(company["id"])
+        properties = await B.company_properties(guild_id, company["id"])
+
+        embed = warning_embed(
+            f"¿Disolver **{company.get('name')}**?",
+            "La empresa se cierra y **no** se borra: el historial, el menú, los "
+            "puestos y la configuración se conservan por si algún día la reactivas.\n\n"
+            "*No se puede deshacer: la caja no vuelve a la empresa.*",
+        )
+        embed.add_field(name="Tu caja", value=f"**{UI.money(funds)}** vuelve a tu bolsillo.",
+                        inline=False)
+        if pending_total:
+            nombres = ", ".join(
+                f"<@{line['member']['discord_id']}> {UI.money(line['amount'])}"
+                for line in pending_lines[:10]
+            )
+            embed.add_field(
+                name="Nómina sin cobrar",
+                value=f"⚠️ **{UI.money(pending_total)}** pendientes se pierden con la empresa "
+                      f"({nombres}). Paga la nómina antes de disolver si quieres pagarla.",
+                inline=False,
+            )
+        if properties:
+            locales = ", ".join(str(p.get("name")) for p in properties[:10])
+            embed.add_field(
+                name="Locales",
+                value=f"{len(properties)} vuelven al mercado de venta: {locales}",
+                inline=False,
+            )
+        else:
+            embed.add_field(name="Locales", value="Esta empresa no tiene locales.", inline=False)
+        if employees:
+            embed.add_field(
+                name="Plantilla",
+                value=f"{len(employees)} personas quedan libres y conservan su ficha.",
+                inline=False,
+            )
+
+        CompanyContext.remember(str(company["id"]), str(interaction.user.id))
         await interaction.followup.send(
-            embed=error_embed("No se puede disolver",
-                              f"**{company.get('name')}** ya está en estado "
-                              f"**{B.COMPANY_STATUS[company['status']]['label'].lower()}**."),
-            ephemeral=True)
-        return
-
-    guild_id = str(interaction.guild_id)
-    funds = B.money(company.get("funds"))
-    pending_total, pending_lines = await B.pending_payroll(company["id"])
-    employees = await B.company_employees(company["id"])
-    properties = await B.company_properties(guild_id, company["id"])
-
-    embed = warning_embed(
-        f"¿Disolver **{company.get('name')}**?",
-        "La empresa se cierra y **no** se borra: el historial, el menú, los "
-        "puestos y la configuración se conservan por si algún día la reactivas.\n\n"
-        "*No se puede deshacer: la caja no vuelve a la empresa.*",
-    )
-    embed.add_field(name="Tu caja", value=f"**{UI.money(funds)}** vuelve a tu bolsillo.",
-                    inline=False)
-    if pending_total:
-        nombres = ", ".join(
-            f"<@{line['member']['discord_id']}> {UI.money(line['amount'])}"
-            for line in pending_lines[:10]
+            embed=embed,
+            view=CompanyDissolveView(str(company["id"]), str(interaction.user.id)),
+            ephemeral=True,
         )
-        embed.add_field(
-            name="Nómina sin cobrar",
-            value=f"⚠️ **{UI.money(pending_total)}** pendientes se pierden con la empresa "
-                  f"({nombres}). Paga la nómina antes de disolver si quieres pagarla.",
-            inline=False,
-        )
-    if properties:
-        locales = ", ".join(str(p.get("name")) for p in properties[:10])
-        embed.add_field(
-            name="Locales",
-            value=f"{len(properties)} vuelven al mercado de venta: {locales}",
-            inline=False,
-        )
-    else:
-        embed.add_field(name="Locales", value="Esta empresa no tiene locales.", inline=False)
-    if employees:
-        embed.add_field(
-            name="Plantilla",
-            value=f"{len(employees)} personas quedan libres y conservan su ficha.",
-            inline=False,
-        )
-    await interaction.followup.send(
-        embed=embed,
-        view=CompanyDissolveView(company["id"], str(interaction.user.id)),
-        ephemeral=True,
-    )
+    except Exception as error:
+        logger.error("Error al preparar confirmación de disolución: %s", error, exc_info=True)
+        await _report(interaction, error)
 
 
 async def _dissolve_confirm(interaction, company):
     """Ejecuta la disolucion y quita los roles de empresa de la plantilla."""
-    await interaction.response.defer(ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     actor_id = str(interaction.user.id)
-    employees = await B.company_employees(company["id"])
     try:
+        employees = await B.company_employees(company["id"])
         result = await B.dissolve_company(guild_id, company["id"], actor_id)
     except Exception as error:
+        logger.error("Error al ejecutar disolución de empresa %s: %s", company.get("id"), error, exc_info=True)
         await _report(interaction, error)
         return
 
@@ -1527,7 +1566,10 @@ async def _dissolve_confirm(interaction, company):
         except (TypeError, ValueError):
             member = None
         if member:
-            await _remove_role(interaction.guild, member, row)
+            try:
+                await _remove_role(interaction.guild, member, row)
+            except Exception:
+                pass
 
     destino = ("la Tesorería Municipal" if result["is_city"]
                else f"tu bolsillo (<@{result['owner_id']}>)")
