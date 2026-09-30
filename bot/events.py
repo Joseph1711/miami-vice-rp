@@ -49,6 +49,33 @@ async def _sync_member_names(bot):
     if total:
         logger.info("Nombres de usuario sincronizados: %d", total)
 
+# Tareas en vuelo del auto-registro de usuario. asyncio solo guarda una
+# referencia debil al task, asi que sin este set el recolector puede matar la
+# tarea a mitad de la consulta y el usuario nunca se llega a registrar.
+_USER_SYNC_TASKS: set = set()
+
+
+def _spawn_user_sync(discord_id: str, guild_id: str, username: str, display_name: str):
+    """Lanza el auto-registro de usuario sin bloquear la interaccion."""
+
+    async def _run():
+        try:
+            await async_get_or_create_user(
+                discord_id,
+                guild_id,
+                username=username,
+                display_name=display_name,
+            )
+        except Exception as error:
+            # Solo se avisa: la interaccion ya esta responding y este sync es
+            # best-effort, un fallo aqui no debe romperla.
+            logger.debug("Auto-update user on interaction: %s", error)
+
+    task = asyncio.create_task(_run())
+    _USER_SYNC_TASKS.add(task)
+    task.add_done_callback(_USER_SYNC_TASKS.discard)
+
+
 def set_bot_task(task):
     """Compatibilidad con versiones que importan set_bot_task desde bot.events"""
     try:
@@ -128,17 +155,19 @@ def setup_events(bot):
 
     @bot.event
     async def on_interaction(interaction: discord.Interaction):
-        # Auto-registro y actualización de username en cualquier interacción
+        # Auto-registro y actualización de username en cualquier interacción.
+        # Esto va en segundo plano y NUNCA se espera: `await` aqui metia una
+        # ida y vuelta a la base de datos delante del ACK de cada boton, select
+        # y modal, y con la base lenta eso se comia los 3 segundos que Discord
+        # concede para responder. Se lanza en una tarea aparte para que el evento
+        # devuelva el control de inmediato.
         if interaction.user and interaction.guild and not interaction.user.bot:
-            try:
-                await async_get_or_create_user(
-                    str(interaction.user.id),
-                    str(interaction.guild.id),
-                    username=interaction.user.name,
-                    display_name=interaction.user.display_name
-                )
-            except Exception as e:
-                logger.debug(f"Auto-update user on interaction: {e}")
+            _spawn_user_sync(
+                str(interaction.user.id),
+                str(interaction.guild.id),
+                interaction.user.name,
+                interaction.user.display_name,
+            )
 
     @bot.event
     async def on_message(message):
