@@ -36,9 +36,10 @@ class PublicJobApplyView(discord.ui.View):
     ciudadano que lo pidió.
     """
 
-    def __init__(self, guild_id: str, viewer_id: str, jobs, timeout: float = SELECT_TIMEOUT,
+    def __init__(self, guild_id: str, viewer_id: str, jobs, timeout: float = None,
                  public: bool = False):
-        super().__init__(timeout=timeout)
+        effective_timeout = None if public else (timeout or SELECT_TIMEOUT)
+        super().__init__(timeout=effective_timeout)
         self.guild_id = guild_id
         self.viewer_id = viewer_id
         self.public = public
@@ -55,19 +56,24 @@ class PublicJobApplyView(discord.ui.View):
             options = [discord.SelectOption(
                 label="No hay empleos disponibles", value="none",
                 description="Pide al staff que publique empleo")]
-        self.add_item(discord.ui.Select(
+        select = discord.ui.Select(
             placeholder="Elige el empleo al que quieres presentarte",
-            min_values=1, max_values=1, options=options))
+            min_values=1, max_values=1, options=options,
+            custom_id="empleos:select_job" if public else None)
+        select.callback = self.select_callback
+        self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
+        # Acknowledge inmediatamente para evitar timeout ("no ha respondido a tiempo")
+        await interaction.response.defer(ephemeral=True)
         if not self.public and str(interaction.user.id) != self.viewer_id:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=error_embed("Este tablero no es tuyo", "Pide `/empleos` para abrir tu propio tablon."),
                 ephemeral=True)
             return
         job_id = self.children[0].values[0]
         if job_id == "none":
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=warning_embed("Sin oferta", "Ahora mismo no hay empleos públicos abiertos."),
                 ephemeral=True)
             if not self.public:
@@ -80,23 +86,24 @@ class PublicJobApplyView(discord.ui.View):
                 await B.claim_action(
                     f"empleo:{self.guild_id}:{interaction.user.id}", APPLY_COOLDOWN)
             except B.ActionInProgress as locked:
-                await interaction.response.send_message(
+                await interaction.followup.send(
                     embed=warning_embed("Espera", str(locked)), ephemeral=True)
                 return
             try:
-                await apply_to_public_job(interaction, self.guild_id, job_id)
+                await apply_to_public_job(interaction, self.guild_id, job_id, already_deferred=True)
             finally:
                 B.release_action(f"empleo:{self.guild_id}:{interaction.user.id}")
             return
-        await apply_to_public_job(interaction, self.guild_id, job_id)
+        await apply_to_public_job(interaction, self.guild_id, job_id, already_deferred=True)
         # El tablón privado era de un solo uso; el público sigue en pie
         # para que el siguiente ciudadano pueda presentarse.
         self.stop()
 
 
-async def apply_to_public_job(interaction: discord.Interaction, guild_id: str, job_id: str):
+async def apply_to_public_job(interaction: discord.Interaction, guild_id: str, job_id: str, already_deferred: bool = False):
     """Contratacion en un empleo publico: rol de Discord, perfil y registro."""
-    await interaction.response.defer(ephemeral=True)
+    if not already_deferred and not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     user_id = str(interaction.user.id)
     try:
         result = await B.assign_public_job(guild_id, user_id, job_id)
@@ -308,11 +315,12 @@ class Jobs(commands.Cog):
         lines = []
         for job in jobs:
             paid = job.get("last_paid_at")
+            emoji = job.get('emoji') or "🧮"
+            paid_text = 'sin cobrar' if not paid else f'`{paid}`'
             lines.append(
-                f"{job.get('emoji') or '\U0001F9FA'} **{job.get('job_name')}** — "
+                f"{emoji} **{job.get('job_name')}** — "
                 f"{UI.money(job.get('salary'))} diarios\n"
-                f"└ contratado: `{job.get('hired_at')}` · ultimo cobro: "
-                f"{'sin cobrar' if not paid else f'`{paid}`'}"
+                f"└ contratado: `{job.get('hired_at')}` · ultimo cobro: {paid_text}"
             )
         embed = success_embed("Tus empleos publicos", "\n\n".join(lines))
         embed.set_footer(text="Cobra con /sueldo · renuncia con /empleos renunciar")

@@ -366,46 +366,19 @@ async def finish_hire(interaction: discord.Interaction, company_id: str, employe
 # ---------------------------------------------------------------------------
 
 
-class CompanyPanelButton(discord.ui.DynamicItem, template=PANEL_CUSTOM_ID):
-    """Boton del panel que sabe a que empresa y a que accion pertenece.
-
-    Antes esto era un `discord.ui.Button` pelado: `Button` sin callback propio
-    cae en el no-op de `Item.callback`, asi que el panel se ve bien pero todos
-    sus botones son inertes. Ademas el `custom_id` lleva el id de la empresa, que
-    cambia en cada invocacion, y `bot.add_view` registra por coincidencia exacta
-    de `custom_id`, no por patron: un boton normal solo valdría para la empresa
-    concreta con la que se construyó la vista.
-
-    Como `DynamicItem`, discord.py registra la CLASE en `bot._dynamic_items` y
-    despacha cualquier `custom_id` que case con el template, sin depender del
-    mensaje ni de la vista que lo contiene. Por eso los botones sobreviven a un
-    reinicio y funcionan en el panel de cualquier empresa.
-    """
+class CompanyPanelButton(discord.ui.Button):
+    """Boton del panel que sabe a que empresa y a que accion pertenece."""
 
     def __init__(self, company_id: str, action: str, label: str, emoji, style, row=None):
         super().__init__(
-            discord.ui.Button(label=label, emoji=emoji, style=style,
-                              custom_id=f"empresa:{company_id}:{action}"),
+            label=label,
+            emoji=emoji,
+            style=style,
+            custom_id=f"empresa:{company_id}:{action}",
             row=row,
         )
         self.company_id = company_id
         self.action = action
-
-    @classmethod
-    def from_custom_id(cls, interaction, item, match):
-        """Reconstruye el boton a partir del `custom_id` que llega del click.
-
-        `item` es el boton real que se pinto en el mensaje, asi que se reutiliza
-        su etiqueta, emoji y estilo; lo unico que no se puede leer de el es a que
-        empresa y a que accion apunta, y eso se saca del `match` del template.
-        """
-        return cls(
-            company_id=match["company_id"],
-            action=match["action"],
-            label=getattr(item, "label", None) or match["action"],
-            emoji=getattr(item, "emoji", None),
-            style=getattr(item, "style", discord.ButtonStyle.secondary),
-        )
 
     async def callback(self, interaction: discord.Interaction):
         viewer = CompanyContext.viewer_of(self.company_id)
@@ -415,6 +388,42 @@ class CompanyPanelButton(discord.ui.DynamicItem, template=PANEL_CUSTOM_ID):
         if not await _guard(interaction, f"panel:{self.action}"):
             return
         await handle_panel_button(interaction.client, interaction, self.company_id, self.action)
+
+
+if hasattr(discord.ui, "DynamicItem"):
+    class CompanyPanelDynamicButton(discord.ui.DynamicItem[discord.ui.Button], template=PANEL_CUSTOM_ID):
+        """DynamicItem de discord.py para persistencia tras reinicio."""
+
+        def __init__(self, company_id: str, action: str, label: str = "Panel", emoji=None,
+                     style=discord.ButtonStyle.secondary, row=None):
+            super().__init__(
+                discord.ui.Button(label=label, emoji=emoji, style=style,
+                                  custom_id=f"empresa:{company_id}:{action}"),
+                row=row,
+            )
+            self.company_id = company_id
+            self.action = action
+
+        @classmethod
+        def from_custom_id(cls, interaction, item, match):
+            return cls(
+                company_id=match["company_id"],
+                action=match["action"],
+                label=getattr(item, "label", None) or match["action"],
+                emoji=getattr(item, "emoji", None),
+                style=getattr(item, "style", discord.ButtonStyle.secondary),
+            )
+
+        async def callback(self, interaction: discord.Interaction):
+            viewer = CompanyContext.viewer_of(self.company_id)
+            if viewer and str(interaction.user.id) != viewer:
+                await _deny(interaction, "Panel ajeno", "Usa `/empresa panel` para abrir el tuyo.")
+                return
+            if not await _guard(interaction, f"panel:{self.action}"):
+                return
+            await handle_panel_button(interaction.client, interaction, self.company_id, self.action)
+else:
+    CompanyPanelDynamicButton = None
 
 
 # Botones del panel: (accion, etiqueta, emoji, estilo). El orden es el que ve
@@ -431,9 +440,7 @@ PANEL_BUTTONS = (
     ("dissolve", "Disolver", "\U0001F6D1", discord.ButtonStyle.danger),
 )
 
-# Confirmacion de la disolucion. Son los mismos `CompanyPanelButton`: el template
-# `empresa:<empresa>:<accion>` no distingue acciones, asi que estos botones tambien
-# sobreviven al reinicio sin vistas Alive.
+# Confirmacion de la disolucion. Son los mismos `CompanyPanelButton`.
 DISSOLVE_ACTIONS = (
     ("dissolve_confirm", "Sí, disolver", "\U0001F6D1", discord.ButtonStyle.danger),
     ("dissolve_cancel", "Cancelar", "↩️", discord.ButtonStyle.secondary),
@@ -443,8 +450,8 @@ DISSOLVE_ACTIONS = (
 class CompanyPanelView(discord.ui.View):
     """Panel principal: botones que abren modales, todos con control de permisos."""
 
-    def __init__(self, company_id: str, viewer_id: str, timeout: float = VIEW_TIMEOUT):
-        super().__init__(timeout=timeout)
+    def __init__(self, company_id: str, viewer_id: str, timeout: float = None):
+        super().__init__(timeout=None)
         self.company_id = company_id
         self.viewer_id = viewer_id
         for action, label, emoji, style in PANEL_BUTTONS:
@@ -460,15 +467,10 @@ class CompanyPanelView(discord.ui.View):
 
 
 class CompanyDissolveView(discord.ui.View):
-    """Confirmacion de la disolucion de una empresa.
+    """Confirmacion de la disolucion de una empresa."""
 
-    Va en efimero y sus botones son `CompanyPanelButton`, asi que el dispatch por
-    patron los encuentra aunque esta vista ya haya caducado o el bot se haya
-    reiniciado entre la pregunta y la respuesta.
-    """
-
-    def __init__(self, company_id: str, viewer_id: str, timeout: float = VIEW_TIMEOUT):
-        super().__init__(timeout=timeout)
+    def __init__(self, company_id: str, viewer_id: str, timeout: float = None):
+        super().__init__(timeout=None)
         self.company_id = company_id
         self.viewer_id = viewer_id
         for action, label, emoji, style in DISSOLVE_ACTIONS:
@@ -493,9 +495,11 @@ class CatalogBuyView(discord.ui.View):
                 emoji=safe_emoji(item.get("emoji"), "\U0001F9FE"),
             ))
         if options:
-            self.add_item(discord.ui.Select(
+            select = discord.ui.Select(
                 placeholder="Elige qué quieres comprar o contratar",
-                min_values=1, max_values=1, options=options))
+                min_values=1, max_values=1, options=options)
+            select.callback = self.select_callback
+            self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
         item_id = self.children[0].values[0]
@@ -540,9 +544,11 @@ class MarketBuyView(discord.ui.View):
             for l in listings[:25]
         ]
         if options:
-            self.add_item(discord.ui.Select(
+            select = discord.ui.Select(
                 placeholder="Empresa que quieres comprar",
-                min_values=1, max_values=1, options=options))
+                min_values=1, max_values=1, options=options)
+            select.callback = self.select_callback
+            self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
         company_id = self.children[0].values[0]
@@ -579,14 +585,16 @@ class Companies(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        """Los botones del panel sobreviven a reinicios gracias a este router.
-
-        `add_view` con una vista de `DynamicItem` registra la CLASE por patron
-        en `bot._dynamic_items`, no cada `custom_id` por separado. Por eso una
-        sola vista vacia basta para que responded todos los paneles, incluidos
-        los que se enviaron antes del reinicio.
-        """
-        self.bot.add_view(CompanyPanelRouter())
+        """Registra DynamicItems y vistas para que los botones persistan."""
+        if CompanyPanelDynamicButton is not None and hasattr(self.bot, "add_dynamic_items"):
+            try:
+                self.bot.add_dynamic_items(CompanyPanelDynamicButton)
+            except Exception as e:
+                logger.debug("No se pudo registrar CompanyPanelDynamicButton: %s", e)
+        try:
+            self.bot.add_view(CompanyPanelRouter())
+        except Exception as e:
+            logger.debug("No se pudo registrar CompanyPanelRouter: %s", e)
 
     empresa = app_commands.Group(
         name="empresa",
@@ -1307,11 +1315,33 @@ async def send_panel(interaction, company):
 
 
 async def handle_panel_button(bot, interaction: discord.Interaction, company_id: str, action: str):
-    """Abre el modal correspondiente a un boton del panel, validando permisos."""
+    """Abre el modal correspondiente a un boton del panel o ejecuta la accion."""
+    # Modales: enviar de inmediato para no agotar el tiempo limite de Discord (3s)
+    # y porque no se puede enviar un modal si la interaccion fue diferida.
+    # La autorizacion y validaciones completas se hacen al procesar el formulario del modal.
+    modals = {
+        "deposit": lambda: UI.AmountModal("Aportar capital", "deposit", company_id, "Importe a aportar"),
+        "investment": lambda: UI.AmountModal("Inversión", "investment", company_id, "Importe invertido"),
+        "withdraw": lambda: UI.AmountModal("Retiro del dueño", "withdraw", company_id, "Importe a retirar"),
+        "expense": lambda: UI.AmountModal("Gasto de empresa", "expense", company_id, "Importe del gasto"),
+        "dividend": lambda: UI.AmountModal("Dividendo", "dividend", company_id, "Importe a repartir"),
+        "positions": lambda: UI.PositionModal(company_id),
+        "menu": lambda: UI.CatalogModal(company_id, "product"),
+        "sell": lambda: UI.SalePriceModal(company_id, 0),
+    }
+    if action in modals:
+        await interaction.response.send_modal(modals[action]())
+        return
+
+    # Para acciones no-modal, deferir de inmediato para evitar "no ha respondido a tiempo"
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
+
     company = await B.get_company(company_id, str(interaction.guild_id))
     if not company:
         await _deny(interaction, "Empresa no encontrada", "Ya no existe ese negocio.")
         return
+
     if action in ("deposit", "investment", "withdraw", "dividend", "sell", "expense"):
         if not await B.require_access(interaction, company_id, owner_only=True):
             return
@@ -1327,28 +1357,12 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
         if not await B.require_access(interaction, company_id, permission="hire"):
             return
     elif action in ("dissolve", "dissolve_confirm", "dissolve_cancel"):
-        # Disolver la empresa es decision del dueno y punto: no hay permiso que
-        # lo delegue en gerente ni en empleado.
         if not await B.require_access(interaction, company_id, owner_only=True):
             return
     else:
         await _deny(interaction, "Acción desconocida", action)
         return
 
-    funds = B.money(company.get("funds"))
-    modals = {
-        "deposit": lambda: UI.AmountModal("Aportar capital", "deposit", company_id, "Importe a aportar"),
-        "investment": lambda: UI.AmountModal("Inversión", "investment", company_id, "Importe invertido"),
-        "withdraw": lambda: UI.AmountModal("Retiro del dueño", "withdraw", company_id, "Importe a retirar"),
-        "expense": lambda: UI.AmountModal("Gasto de empresa", "expense", company_id, "Importe del gasto"),
-        "dividend": lambda: UI.AmountModal("Dividendo", "dividend", company_id, "Importe a repartir"),
-        "positions": lambda: UI.PositionModal(company_id),
-        "menu": lambda: UI.CatalogModal(company_id, "product"),
-        "sell": lambda: UI.SalePriceModal(company_id, funds),
-    }
-    if action in modals:
-        await interaction.response.send_modal(modals[action]())
-        return
     if action == "payroll":
         await _payroll_from_button(interaction, company)
         return
@@ -1362,7 +1376,7 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
         await _dissolve_from_button(interaction, company)
         return
     if action == "dissolve_cancel":
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=info_embed("Disolución cancelada", "Tu empresa sigue como estaba."),
             ephemeral=True)
         return
@@ -1371,7 +1385,8 @@ async def handle_panel_button(bot, interaction: discord.Interaction, company_id:
 
 
 async def _payroll_from_button(interaction, company):
-    await interaction.response.defer(ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     total_due, count = await B.pending_payroll(company["id"])
     if not count:
         await interaction.followup.send(
@@ -1405,18 +1420,30 @@ async def _hire_from_button(interaction, company):
     members = [m for m in interaction.guild.members
                if not m.bot and str(m.id) not in {str(company.get("owner_id"))}]
     if not members:
-        await interaction.response.send_message(
-            embed=error_embed("Sin candidatos", "No hay miembros a los que contratar."), ephemeral=True)
+        if interaction.response.is_done():
+            await interaction.followup.send(
+                embed=error_embed("Sin candidatos", "No hay miembros a los que contratar."), ephemeral=True)
+        else:
+            await interaction.response.send_message(
+                embed=error_embed("Sin candidatos", "No hay miembros a los que contratar."), ephemeral=True)
         return
-    await interaction.response.send_message(
-        content=f"Contratando en **{company.get('name')}**…",
-        view=UI.HireMemberSelect(company["id"], members),
-        ephemeral=True,
-    )
+    if interaction.response.is_done():
+        await interaction.followup.send(
+            content=f"Contratando en **{company.get('name')}**…",
+            view=UI.HireMemberSelect(company["id"], members),
+            ephemeral=True,
+        )
+    else:
+        await interaction.response.send_message(
+            content=f"Contratando en **{company.get('name')}**…",
+            view=UI.HireMemberSelect(company["id"], members),
+            ephemeral=True,
+        )
 
 
 async def _finance_from_button(interaction, company):
-    await interaction.response.defer(ephemeral=True)
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     entries = await B.company_ledger(company["id"], limit=20)
     await interaction.followup.send(
         embed=UI.ledger_embed(entries, B.money(company.get("funds"))), ephemeral=True)
@@ -1424,15 +1451,16 @@ async def _finance_from_button(interaction, company):
 
 async def _dissolve_from_button(interaction, company):
     """Pide confirmacion antes de disolver, con las cifras que se van a ver."""
+    if not interaction.response.is_done():
+        await interaction.response.defer(ephemeral=True)
     if (company.get("status") or "active") in B.BLOCKED_STATUSES:
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=error_embed("No se puede disolver",
                               f"**{company.get('name')}** ya está en estado "
                               f"**{B.COMPANY_STATUS[company['status']]['label'].lower()}**."),
             ephemeral=True)
         return
 
-    await interaction.response.defer(ephemeral=True)
     guild_id = str(interaction.guild_id)
     funds = B.money(company.get("funds"))
     pending_total, pending_lines = await B.pending_payroll(company["id"])

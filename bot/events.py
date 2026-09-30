@@ -153,7 +153,7 @@ def setup_events(bot):
         # arranque y saturaban el pool de conexiones.
         asyncio.create_task(_sync_member_names(bot))
 
-    @bot.event
+    @bot.listen("on_interaction")
     async def on_interaction(interaction: discord.Interaction):
         # Auto-registro y actualización de username en cualquier interacción.
         # Esto va en segundo plano y NUNCA se espera: `await` aqui metia una
@@ -168,6 +168,25 @@ def setup_events(bot):
                 interaction.user.name,
                 interaction.user.display_name,
             )
+
+        # Fallback de seguridad: si un botón de empresa llega y no ha sido respondido
+        # por su vista (p. ej. tras reinicio del bot o vista caducada),
+        # lo despacha directamente para asegurar respuesta inmediata y no superar los 3s.
+        if interaction.type == discord.InteractionType.component:
+            custom_id = interaction.data.get("custom_id", "")
+            if custom_id.startswith("empresa:"):
+                parts = custom_id.split(":")
+                if len(parts) >= 3:
+                    company_id, action = parts[1], parts[2]
+                    async def _fallback_empresa():
+                        await asyncio.sleep(0.3)
+                        if not interaction.response.is_done():
+                            try:
+                                from bot.cogs.companies import handle_panel_button
+                                await handle_panel_button(bot, interaction, company_id, action)
+                            except Exception as ex:
+                                logger.error("Error en fallback de boton de empresa %s: %s", custom_id, ex)
+                    asyncio.create_task(_fallback_empresa())
 
     @bot.event
     async def on_message(message):

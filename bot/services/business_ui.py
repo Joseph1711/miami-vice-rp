@@ -121,8 +121,9 @@ async def company_dossier(company_id: str, viewer_access: dict, guild_id: str,
     permisos de quien mira.
     """
     company = viewer_access.get("company") or await B.get_company(company_id, guild_id)
+    comp_emoji = company.get('emoji') or "🏢"
     embed = discord.Embed(
-        title=f"{company.get('emoji') or '\U0001F3E2'} {company.get('name')}",
+        title=f"{comp_emoji} {company.get('name')}",
         description=(company.get("description") or "Sin descripción."),
         color=B.COMPANY_STATUS.get(company.get("status"), B.COMPANY_STATUS["active"])["color"],
     )
@@ -232,8 +233,9 @@ def catalog_embed(items, company) -> discord.Embed:
     for item in items:
         tag = "servicio" if item.get("kind") == "service" else "producto"
         role = f" · rol <@&{item['role_id']}>" if item.get("role_id") else ""
+        item_emoji = item.get('emoji') or "🧾"
         lines.append(
-            f"{item.get('emoji') or '\U0001F9FE'} **{item.get('name')}** — {money(item.get('price'))}"
+            f"{item_emoji} **{item.get('name')}** — {money(item.get('price'))}"
             f" `{tag}`{role}"
         )
     embed.description = "\n".join(lines)[:3900]
@@ -676,16 +678,23 @@ class HireMemberSelect(discord.ui.View):
             for m in candidates[:25]
         ] or [discord.SelectOption(label="No hay miembros que contratar", value="none",
                                    description="Invita gente al servidor")]
-        self.add_item(discord.ui.Select(
-            placeholder="Elige a quién contratar", min_values=1, max_values=1, options=options))
+        select = discord.ui.Select(
+            placeholder="Elige a quién contratar", min_values=1, max_values=1, options=options)
+        select.callback = self.select_callback
+        self.add_item(select)
         self.value = None
 
     async def select_callback(self, interaction: discord.Interaction):
         member_id = self.children[0].values[0]
         if member_id == "none":
-            await interaction.response.send_message(
-                embed=error_embed("Sin candidatos", "No hay miembros en el servidor a los que contratar."),
-                ephemeral=True)
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    embed=error_embed("Sin candidatos", "No hay miembros en el servidor a los que contratar."),
+                    ephemeral=True)
+            else:
+                await interaction.response.send_message(
+                    embed=error_embed("Sin candidatos", "No hay miembros en el servidor a los que contratar."),
+                    ephemeral=True)
             return
         self.value = member_id
         positions = await B.company_positions(self.company_id)
@@ -706,34 +715,38 @@ class RoleAssignSelect(discord.ui.View):
                    for p in self.positions[:25]]
         if not options:
             options = [discord.SelectOption(label="Ningún puesto tiene rol", value="none")]
-        self.add_item(discord.ui.Select(
+        select = discord.ui.Select(
             placeholder="Rol de empresa que quieres recibir", min_values=1, max_values=1,
-            options=options))
+            options=options)
+        select.callback = self.select_callback
+        self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
         position_id = self.children[0].values[0]
         if position_id == "none":
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=warning_embed("Sin roles", "Ningún puesto de esta empresa tiene rol de Discord."),
                 ephemeral=True)
             return
         position = next((p for p in self.positions if p.get("id") == position_id), None)
-        role = interaction.guild.get_role(int(position.get("role_id")))
+        role = interaction.guild.get_role(int(position.get("role_id"))) if position and position.get("role_id") else None
         member = interaction.user
         if not role:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=error_embed("Rol no encontrado", "Ese rol ya no existe en el servidor."),
                 ephemeral=True)
             return
         if not member.guild_permissions.manage_roles and role >= member.top_role:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=error_embed("Sin permisos", "No puedo darte un rol por encima del tuyo."),
                 ephemeral=True)
             return
         try:
             await member.add_roles(role, reason=f"Rol de empresa {self.company_name}")
         except discord.Forbidden:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 embed=error_embed("Permiso denegado", "No me dejan asignar ese rol."),
                 ephemeral=True)
             return
@@ -742,7 +755,7 @@ class RoleAssignSelect(discord.ui.View):
             " WHERE company_id=$2 AND discord_id=$3",
             (str(role.id), self.company_id, str(member.id)),
         )
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=success_embed("Rol asignado", f"Has recibido el rol {role.mention} de **{self.company_name}**."),
             ephemeral=True)
         self.stop()
