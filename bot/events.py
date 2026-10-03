@@ -97,8 +97,11 @@ async def publish_command_catalog(bot, message):
     if not wants_catalog(message.content, bot.user.id):
         return
     try:
-        for embeds in build_catalog_messages():
-            await message.channel.send(embed=embeds)
+        # `embeds=` (plural) y no `embed=`: cada elemento de la lista ya es un
+        # Embed, y `embed=` espera uno solo. Pasarle la lista ahi revienta con
+        # 'list' object has no attribute 'to_dict' dentro de discord.py.
+        for batch in build_catalog_messages():
+            await message.channel.send(embeds=batch)
     except discord.HTTPException as error:
         logger.error("No se pudo publicar el catalogo de Miami Systems: %s", error)
     except Exception as error:
