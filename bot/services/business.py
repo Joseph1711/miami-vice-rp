@@ -24,7 +24,8 @@ import logging
 
 from bot.db import aexecute, aexecute_atomic
 from bot.helpers import (EMOJI_FALLBACK, generate_id, async_get_or_create_user,
-                         async_get_or_create_guild_config, safe_emoji)
+                         async_get_or_create_guild_config, safe_emoji,
+                         set_active_dni_occupation)
 from bot.services.catalogs import CITY_OWNER_ID, DEFAULT_JOBS, CITY_COMPANIES
 
 logger = logging.getLogger("bot.business")
@@ -2072,10 +2073,7 @@ async def assign_public_job(guild_id: str, user_id: str, job_id: str):
 
     # La ocupacion del DNI refleja el empleo publico vigente.
     try:
-        await aexecute(
-            "UPDATE dni_records SET occupation=$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3",
-            (job.get("name", "Ciudadano"), user_id, guild_id),
-        )
+        await set_active_dni_occupation(guild_id, user_id, job.get("name", "Ciudadano"))
     except Exception as dni_error:
         logger.debug("[Business] DNI occupation no actualizada: %s", dni_error)
 
@@ -2104,23 +2102,15 @@ async def leave_public_job(guild_id: str, user_id: str, job_id: str = None):
         (target["id"],),
     )
     remaining = [row for row in current if row["id"] != target["id"]]
-    if remaining:
-        try:
-            await aexecute(
-                "UPDATE dni_records SET occupation=$1, updated_at=NOW() WHERE discord_id=$2 AND guild_id=$3",
-                (remaining[-1].get("job_name", "Ciudadano"), user_id, guild_id),
+    try:
+        if remaining:
+            await set_active_dni_occupation(
+                guild_id, user_id, remaining[-1].get("job_name", "Ciudadano")
             )
-        except Exception:
-            pass
-    else:
-        try:
-            await aexecute(
-                "UPDATE dni_records SET occupation='Ciudadano', updated_at=NOW()"
-                " WHERE discord_id=$1 AND guild_id=$2",
-                (user_id, guild_id),
-            )
-        except Exception:
-            pass
+        else:
+            await set_active_dni_occupation(guild_id, user_id, "Ciudadano")
+    except Exception as dni_error:
+        logger.debug("[Business] DNI occupation no liberada: %s", dni_error)
     return target
 
 

@@ -397,7 +397,7 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         canal: discord.TextChannel = None,
         anuncio_extra: str = None
     ):
-        await self.abrir_servidor(interaction, canal, anuncio_extra)
+        await ServerControl.abrir_servidor.callback(self, interaction, canal, anuncio_extra)
 
     @app_commands.command(
         name="abrir-servidor",

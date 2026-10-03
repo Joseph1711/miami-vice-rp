@@ -441,6 +441,29 @@ async def generate_unique_dni(guild_id: str) -> str:
             return dni
     return f"MIA-{uuid.uuid4().hex[:6].upper()}"
 
+async def active_dni_number(guild_id: str, user_id) -> str | None:
+    """Numero de DNI del personaje que ese ciudadano tiene activo ahora mismo."""
+    user_row = await aexecute(
+        "SELECT dni_number FROM users WHERE guild_id=$1 AND discord_id=$2",
+        (str(guild_id), str(user_id)), fetch="one"
+    )
+    return (user_row or {}).get("dni_number")
+
+async def set_active_dni_occupation(guild_id: str, user_id, occupation: str) -> None:
+    """Cambia la ocupacion SOLO del personaje activo.
+
+    Un ciudadano puede tener hasta varios DNI. Un UPDATE por `discord_id`
+    repintaba el mismo empleo en todos sus personajes, y cada uno pierde asi
+    la ocupacion que tenia asignada por su cuenta.
+    """
+    dni_number = await active_dni_number(guild_id, user_id)
+    if not dni_number:
+        return
+    await aexecute(
+        "UPDATE dni_records SET occupation=$1, updated_at=NOW() WHERE guild_id=$2 AND dni_number=$3",
+        (occupation, str(guild_id), dni_number)
+    )
+
 async def generate_unique_weapon_serial(guild_id: str) -> str:
     """Genera un número de serie único y aleatorio para armas (ej. MV-WPN-73921-FL)."""
     import random

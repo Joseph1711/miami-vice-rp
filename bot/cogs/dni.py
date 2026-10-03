@@ -36,6 +36,122 @@ def _parse_age_from_birth_date(birth_str: str) -> int:
     return 21
 
 
+def normalize_dni_query(raw: str) -> str:
+    """Reduce el texto buscado a sus digitos: 'mia 123456' -> '123456'."""
+    value = re.sub(r"[^A-Z0-9]", "", (raw or "").upper())
+    if value.startswith("MIA"):
+        value = value[3:]
+    return value
+
+
+async def fetch_active_dni(gid: str, uid: str) -> dict | None:
+    """Devuelve el DNI del personaje que ese ciudadano tiene activo ahora mismo.
+
+    El personaje activo vive en `users.dni_number`; si por lo que sea no cuadra
+    se cae al DNI mas reciente para no dejar al ciudadano sin documento.
+    """
+    user_row = await aexecute(
+        "SELECT dni_number FROM users WHERE guild_id=$1 AND discord_id=$2",
+        (gid, uid), fetch="one"
+    )
+    active_dni = (user_row or {}).get("dni_number")
+
+    record = None
+    if active_dni:
+        record = await aexecute(
+            "SELECT * FROM dni_records WHERE guild_id=$1 AND dni_number=$2",
+            (gid, active_dni), fetch="one"
+        )
+    if not record:
+        record = await aexecute(
+            "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 1",
+            (gid, uid), fetch="one"
+        )
+    return record
+
+
+async def fetch_dni_by_number(gid: str, raw_number: str) -> dict | None:
+    """Localiza un DNI por su numero tolerando '123456', 'mia-123456', etc."""
+    raw = (raw_number or "").strip().upper()
+    if not raw:
+        return None
+
+    record = await aexecute(
+        "SELECT * FROM dni_records WHERE guild_id=$1 AND dni_number ILIKE $2",
+        (gid, raw), fetch="one"
+    )
+    if record:
+        return record
+
+    digits = normalize_dni_query(raw)
+    if not digits:
+        return None
+
+    return await aexecute(
+        "SELECT * FROM dni_records WHERE guild_id=$1 AND dni_number ILIKE $2",
+        (gid, f"%{digits}%"), fetch="one"
+    )
+
+
+async def count_characters(gid: str, uid: str) -> int:
+    rows = await aexecute(
+        "SELECT id FROM dni_records WHERE guild_id=$1 AND discord_id=$2",
+        (gid, uid), fetch="all"
+    ) or []
+    return len(rows)
+
+
+async def build_dni_card(record: dict, member: discord.abc.User | None) -> discord.Embed:
+    """Monta la ficha visual del DNI. `member` es el titular en Discord, si se conoce."""
+    status = record.get("status", "active")
+    status_map = {
+        "active": "🟢 Válido / Activo",
+        "revoked": "🔴 Revocado / Anulado",
+        "suspended": "🟡 Suspendido"
+    }
+
+    card = info_embed(
+        "🪪 DOCUMENTO NACIONAL DE IDENTIDAD",
+        f"**Número Único:** `{record['dni_number']}`\n**Estado Legal:** {status_map.get(status, status)}"
+    )
+
+    # Usar foto de perfil de Roblox si existe
+    avatar = record.get("avatar_url")
+    if not avatar and record.get("roblox_username"):
+        _, av_url = await fetch_roblox_user(record["roblox_username"])
+        if av_url:
+            avatar = av_url
+
+    if avatar:
+        card.set_thumbnail(url=avatar)
+    elif member is not None:
+        card.set_thumbnail(url=member.display_avatar.url)
+
+    card.add_field(name="👤 Nombre Completo", value=f"**{record.get('full_name', 'N/A')}**", inline=True)
+
+    bdate_val = record.get('birth_date') or 'N/A'
+    age_val = record.get('age')
+    age_str = f" ({age_val} años)" if age_val else ""
+    card.add_field(name="📅 Nacimiento / Edad", value=f"{bdate_val}{age_str}", inline=True)
+
+    card.add_field(name="⚧ Género", value=record.get('gender') or 'N/A', inline=True)
+    card.add_field(name="🌎 Nacionalidad", value=record.get('nationality') or 'N/A', inline=True)
+    card.add_field(name="💼 Ocupación", value=record.get('occupation') or 'Ciudadano', inline=True)
+
+    roblox_name = record.get("roblox_username")
+    roblox_id = record.get("roblox_id")
+    if roblox_name:
+        roblox_link = f"https://www.roblox.com/users/{roblox_id}/profile" if roblox_id else f"https://www.roblox.com/search/users?keyword={roblox_name}"
+        card.add_field(name="🎮 Roblox Vinculado", value=f"[{roblox_name}]({roblox_link})", inline=True)
+    else:
+        card.add_field(name="🎮 Roblox", value="*Sin vincular (`/roblox vincular`)*", inline=True)
+
+    owner_id = str(record.get("discord_id", ""))
+    issue_date = str(record.get("created_at", ""))[:10]
+    card.set_footer(text=f"Expedido: {issue_date or 'S/D'} • Titular: <@{owner_id}> ({owner_id})")
+    return card
+
+
 class CreateDNIModal(discord.ui.Modal):
     def __init__(self, character_slot: int = 1, existing_dni_id: str = None):
         title = f"DNI — Personaje #{character_slot}" if character_slot > 1 else "Creación de DNI (Personaje IC)"
@@ -211,14 +327,17 @@ class CharacterSelectView(discord.ui.View):
         self.add_item(select)
 
     async def select_callback(self, interaction: discord.Interaction):
+        # Antes de escribir en la base de datos hay que responder: Discord cierra
+        # la interaccion a los 3 segundos y el UPDATE puede tardar mas.
+        await interaction.response.defer(ephemeral=True)
         if str(interaction.user.id) != self.user_id:
-            await interaction.response.send_message("❌ Este menú no te pertenece.", ephemeral=True)
+            await interaction.followup.send("❌ Este menú no te pertenece.", ephemeral=True)
             return
 
         selected_id = interaction.data["values"][0]
         selected_char = next((c for c in self.characters if str(c["id"]) == selected_id), None)
         if not selected_char:
-            await interaction.response.send_message("❌ Personaje no encontrado.", ephemeral=True)
+            await interaction.followup.send("❌ Personaje no encontrado.", ephemeral=True)
             return
 
         gid = str(interaction.guild_id)
@@ -243,7 +362,7 @@ class CharacterSelectView(discord.ui.View):
         card.add_field(name="🎂 Edad", value=f"{selected_char.get('age', 'N/A')} años", inline=True)
         card.add_field(name="💼 Ocupación", value=selected_char.get("occupation", "Ciudadano"), inline=True)
         
-        await interaction.response.edit_message(embed=card, view=None)
+        await interaction.edit_original_response(embed=card, view=None)
 
 
 class DNI(commands.Cog, name="DNI"):
@@ -254,6 +373,9 @@ class DNI(commands.Cog, name="DNI"):
 
     @dni_group.command(name="crear", description="Crear o tramitar un Documento Nacional de Identidad (hasta 5 personajes)")
     async def dni_crear(self, interaction: discord.Interaction):
+        await self._crear_dni(interaction)
+
+    async def _crear_dni(self, interaction: discord.Interaction):
         gid = str(interaction.guild_id)
         uid = str(interaction.user.id)
 
@@ -275,7 +397,7 @@ class DNI(commands.Cog, name="DNI"):
 
     @dni_group.command(name="solicitar", description="Alias: Tramitar un nuevo personaje (DNI)")
     async def dni_solicitar(self, interaction: discord.Interaction):
-        await self.dni_crear(interaction)
+        await self._crear_dni(interaction)
 
     @dni_group.command(name="mis_personajes", description="Ver y alternar entre todos tus personajes registrados (hasta 5)")
     async def mis_personajes(self, interaction: discord.Interaction):
@@ -322,31 +444,36 @@ class DNI(commands.Cog, name="DNI"):
     @dni_group.command(name="ver", description="Ver el DNI de un ciudadano")
     @app_commands.describe(usuario="Ciudadano a consultar (omite para ver tu personaje activo)", numero_dni="Consultar un DNI específico")
     async def dni_ver(self, interaction: discord.Interaction, usuario: discord.Member = None, numero_dni: str = None):
+        await self._ver_dni(interaction, usuario=usuario, numero_dni=numero_dni)
+
+    @dni_group.command(name="buscar", description="Buscar a un ciudadano por su número de DNI")
+    @app_commands.describe(numero_dni="Número de DNI (ej: MIA-123456)")
+    async def dni_buscar(self, interaction: discord.Interaction, numero_dni: str):
+        await self._ver_dni(interaction, numero_dni=numero_dni)
+
+    async def _ver_dni(self, interaction: discord.Interaction, usuario: discord.Member = None, numero_dni: str = None):
         await interaction.response.defer()
-        target = usuario or interaction.user
         gid = str(interaction.guild_id)
-        uid = str(target.id)
+        target = usuario or interaction.user
+        by_number = bool(numero_dni)
 
         try:
             record = None
-            if numero_dni:
-                record = await aexecute(
-                    "SELECT * FROM dni_records WHERE guild_id=$1 AND dni_number ILIKE $2",
-                    (gid, numero_dni.strip().upper()), fetch="one"
-                )
+            if by_number:
+                record = await fetch_dni_by_number(gid, numero_dni)
+                if record:
+                    # El titular es el dueño del documento encontrado, no quien pregunta.
+                    target = self._resolve_member(interaction, record.get("discord_id")) or interaction.user
             else:
-                user_row = await aexecute("SELECT dni_number FROM users WHERE guild_id=$1 AND discord_id=$2", (gid, uid), fetch="one")
-                active_dni = user_row.get("dni_number") if user_row else None
-                if active_dni:
-                    record = await aexecute("SELECT * FROM dni_records WHERE guild_id=$1 AND dni_number=$2", (gid, active_dni), fetch="one")
-                if not record:
-                    record = await aexecute(
-                        "SELECT * FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY created_at DESC LIMIT 1",
-                        (gid, uid), fetch="one"
-                    )
+                record = await fetch_active_dni(gid, str(target.id))
 
             if not record:
-                if target.id == interaction.user.id:
+                if by_number:
+                    await interaction.followup.send(embed=error_embed(
+                        "DNI No Encontrado",
+                        f"No hay ningun ciudadano registrado con el DNI `{numero_dni.strip()}`.\nEl formato habitual es `MIA-123456`."
+                    ), ephemeral=True)
+                elif target.id == interaction.user.id:
                     await interaction.followup.send(embed=error_embed(
                         "Sin DNI",
                         "Aún no has tramitado tu DNI. Puedes crearlo gratis ahora mismo usando el comando `/dni crear`."
@@ -358,63 +485,35 @@ class DNI(commands.Cog, name="DNI"):
                     ), ephemeral=True)
                 return
 
-            status = record.get("status", "active")
-            status_map = {
-                "active": "🟢 Válido / Activo",
-                "revoked": "🔴 Revocado / Anulado",
-                "suspended": "🟡 Suspendido"
-            }
+            card = await build_dni_card(record, target)
 
-            card = info_embed(
-                f"🪪 DOCUMENTO NACIONAL DE IDENTIDAD",
-                f"**Número Único:** `{record['dni_number']}`\n**Estado Legal:** {status_map.get(status, status)}"
-            )
+            # Si el titular tiene varios personajes, avisamos de que se muestra el activo.
+            try:
+                total = await count_characters(gid, str(record.get("discord_id", "")))
+            except Exception:
+                total = 1
+            if total > 1:
+                card.add_field(
+                    name="🎭 Personaje Activo",
+                    value=f"Mostrando **1 de {total}** personajes de <@{record.get('discord_id')}>.\nCambia el activo con `/dni mis_personajes`.",
+                    inline=False
+                )
 
-            # Usar foto de perfil de Roblox si existe
-            avatar = record.get("avatar_url")
-            if not avatar and record.get("roblox_username"):
-                _, av_url = await fetch_roblox_user(record["roblox_username"])
-                if av_url:
-                    avatar = av_url
-            
-            if avatar:
-                card.set_thumbnail(url=avatar)
-            else:
-                card.set_thumbnail(url=target.display_avatar.url)
-
-            card.add_field(name="👤 Nombre Completo", value=f"**{record.get('full_name', 'N/A')}**", inline=True)
-            
-            bdate_val = record.get('birth_date', 'N/A')
-            age_val = record.get('age')
-            age_str = f" ({age_val} años)" if age_val else ""
-            card.add_field(name="📅 Nacimiento / Edad", value=f"{bdate_val}{age_str}", inline=True)
-            
-            card.add_field(name="⚧ Género", value=record.get('gender', 'N/A'), inline=True)
-            card.add_field(name="🌎 Nacionalidad", value=record.get('nationality', 'N/A'), inline=True)
-            card.add_field(name="💼 Ocupación", value=record.get('occupation', 'Ciudadano'), inline=True)
-
-            roblox_name = record.get("roblox_username")
-            roblox_id = record.get("roblox_id")
-            if roblox_name:
-                roblox_link = f"https://www.roblox.com/users/{roblox_id}/profile" if roblox_id else f"https://www.roblox.com/search/users?keyword={roblox_name}"
-                card.add_field(name="🎮 Roblox Vinculado", value=f"[{roblox_name}]({roblox_link})", inline=True)
-            else:
-                card.add_field(name="🎮 Roblox", value="*Sin vincular (`/roblox vincular`)*", inline=True)
-
-            issue_date = str(record.get("created_at", ""))[:10]
-            card.set_footer(text=f"Expedido: {issue_date} • Titular: @{target.name} ({target.id})")
             await interaction.followup.send(embed=card)
         except Exception as e:
-            logger.error(f"[DNI] Error al consultar DNI de {uid}: {e}", exc_info=True)
+            logger.error(f"[DNI] Error al consultar DNI: {e}", exc_info=True)
             await interaction.followup.send(
                 embed=error_embed("Error al Consultar DNI", f"Ocurrió un error al cargar el registro: `{e}`"),
                 ephemeral=True
             )
 
-    @dni_group.command(name="buscar", description="Buscar a un ciudadano por su número de DNI")
-    @app_commands.describe(numero_dni="Número de DNI exacto (ej: MIA-123456)")
-    async def dni_buscar(self, interaction: discord.Interaction, numero_dni: str):
-        await self.dni_ver(interaction, numero_dni=numero_dni)
+    @staticmethod
+    def _resolve_member(interaction: discord.Interaction, discord_id) -> discord.Member | None:
+        """Convierte el discord_id guardado del titular en un Member del guild."""
+        try:
+            return interaction.guild.get_member(int(discord_id))
+        except (TypeError, ValueError, AttributeError):
+            return None
 
     @dni_group.command(name="revocar", description="Revocar o suspender el DNI de un usuario (Admin/Policía)")
     @app_commands.describe(usuario="Ciudadano a sancionar", motivo="Motivo de la revocación")

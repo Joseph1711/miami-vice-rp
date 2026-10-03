@@ -413,7 +413,7 @@ class Help(commands.Cog):
     @app_commands.describe(categoria="Categoría opcional a consultar")
     @app_commands.choices(categoria=category_choices())
     async def ayuda(self, interaction: discord.Interaction, categoria: str = None):
-        await self.help(interaction, categoria)
+        await Help.help.callback(self, interaction, categoria)
 
 
 async def setup(bot):
