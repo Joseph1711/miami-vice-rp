@@ -9,6 +9,7 @@ import random
 from bot.db import aexecute_many
 from bot.helpers import async_get_or_create_user, async_get_or_create_guild_config
 from bot.services.levels import add_xp
+from bot.miami_systems import build_catalog_messages, wants_catalog
 from bot.middleware.antispam import is_spamming
 from bot.config import XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX
 
@@ -83,6 +84,26 @@ def set_bot_task(task):
         _set_bot_task(task)
     except Exception:
         pass
+
+async def publish_command_catalog(bot, message):
+    """Publica el catalogo de Miami Systems si el mensaje lo pide.
+
+    Se responde antes que a nada mas: el catalogo es la respuesta principal y la
+    XP es secundaria. Un fallo aqui no debe impedir que `/help` siga siendo
+    alcanzable, asi que cualquier error se registra y se sigue.
+    """
+    if bot.user is None:
+        return
+    if not wants_catalog(message.content, bot.user.id):
+        return
+    try:
+        for embeds in build_catalog_messages():
+            await message.channel.send(embed=embeds)
+    except discord.HTTPException as error:
+        logger.error("No se pudo publicar el catalogo de Miami Systems: %s", error)
+    except Exception as error:
+        logger.error("Fallo inesperado publicando el catalogo de Miami Systems: %s",
+                     error, exc_info=True)
 
 def set_bot(*args, **kwargs):
     """Compatibilidad con versiones que importan set_bot desde bot.events"""
@@ -196,6 +217,8 @@ def setup_events(bot):
             return
         if is_spamming(str(message.author.id), str(message.guild.id)):
             return
+
+        await publish_command_catalog(bot, message)
         
         xp_amount = random.randint(XP_PER_MESSAGE_MIN, XP_PER_MESSAGE_MAX)
         try:
