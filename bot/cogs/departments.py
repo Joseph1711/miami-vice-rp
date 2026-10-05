@@ -150,6 +150,117 @@ FLEET_CATALOG_ALIASES = {
     "FDOT": ["FDOT", "DOT", "TRANSPORTE", "TRANSPORTATION", "DOTD"],
 }
 
+# Precio unitario oficial de cada modelo del catálogo.
+FLEET_PRICES = {
+    "4-Wheeler": 8000,
+    "Averon Q8 2022": 45000,
+    "BKM Munich 2020": 32000,
+    "Bullhorn BH15 SSV 2009": 18000,
+    "Bullhorn Determinator C/T 2022": 28000,
+    "Bullhorn Determinator SFP Fury 2022": 26000,
+    "Bullhorn Determinator SFP Fury Blackjack Widebody 2022": 27000,
+    "Bullhorn Foreman 1988": 12000,
+    "Bullhorn Prancer Fury Widebody Pursuit 2020": 24000,
+    "Bullhorn Prancer Pursuit 2011": 16000,
+    "Bullhorn Prancer Pursuit 2015": 19000,
+    "Bullhorn Pueblo Pursuit 2022": 21000,
+    "Canyon Descender": 10000,
+    "Celestial Truckatron 2024": 38000,
+    "Chevlon Amigo LZR 2011": 14000,
+    "Chevlon Antelope SS 1994": 13000,
+    "Chevlon Camion PPV 2000": 15000,
+    "Chevlon Camion PPV 2008": 17000,
+    "Chevlon Camion PPV 2018": 19000,
+    "Chevlon Camion PPV 2021": 22000,
+    "Chevlon Captain PPV 2009": 16000,
+    "Chevlon Commuter Van 2006": 18000,
+    "Chevlon Corbeta RZR 2014": 11000,
+    "Chevlon Inferno 1981": 9000,
+    "Chevlon Platoro PPV 2019": 20000,
+    "Emergency Services Falcon Advance+ 2020": 26000,
+    "Equipment Trailer": 5000,
+    "Falcon Advance 350 2020": 24000,
+    "Falcon Advance XET 2022": 25000,
+    "Falcon eStallion 2024": 55000,
+    "Falcon Global 350 2013": 22000,
+    "Falcon Interceptor Sedan 2017": 23000,
+    "Falcon Interceptor Utility 2013": 21000,
+    "Falcon Interceptor Utility 2019": 25000,
+    "Falcon Interceptor Utility 2024": 28000,
+    "Falcon Prime Eques Interceptor 2003": 15000,
+    "Falcon Rampage Interceptor 2021": 24000,
+    "Falcon Stallion 350 2015": 22000,
+    "Falcon Traveller 2002": 13000,
+    "Falcon Traveller PPV 2022": 20000,
+    "Ferdinand Rapido GTR3 2023": 65000,
+    "Mobile Command 2005": 35000,
+    "Mobile Surveillance Trailer": 8000,
+    "Prisoner Transport Bus": 40000,
+    "Silhouette Discorso 2024": 70000,
+    "Stuttgart Runner Prisoner Transport 2020": 30000,
+    "SWAT Armored Truck 2011": 48000,
+    "Brush Falcon Advance+ 2020": 26000,
+    "Chevlon Camion 2018": 19000,
+    "Chevlon L/15 Brush Truck 1981": 14000,
+    "Falcon Advance 450 Ambulance 2020": 32000,
+    "Falcon Advance 600 Pumper 1956": 28000,
+    "Falcon Global 450 Ambulance 2018": 30000,
+    "Heavy Rescue": 55000,
+    "Medical Bus": 42000,
+    "Mobile Command Center": 50000,
+    "Redline Fire Engine": 58000,
+    "Redline Heavy Tanker 2014": 46000,
+    "Redline Midmount Ladder": 65000,
+    "Redline Rearmount Ladder": 68000,
+    "Redline Tanker 2014": 44000,
+    "Redline Type 3 Brush Truck 2014": 26000,
+    "Special Operations Unit": 52000,
+    "Squad Falcon Advance+ 2020": 26000,
+    "Aikawa Street Sweeper 2010": 22000,
+    "Chevlon L/35 Flatbed Tow Truck 1981": 19000,
+    "Explorer Dump Truck 2015": 32000,
+    "Explorer Flatbed Tow Truck 2015": 26000,
+    "Explorer Salt Truck 2015": 30000,
+    "Explorer Transport Truck 2015": 34000,
+    "Falcon Advance 450 2020": 26000,
+    "Falcon Advance 450 Bucket Truck 2020": 28000,
+    "Falcon Advance 450 Roadside Assist 2020": 24000,
+    "Falcon Advance 450 Tow Truck 2020": 25000,
+    "Falcon Global 450 Utility 2018": 27000,
+    "Forklift": 12000,
+    "Front Loader Tractor": 38000,
+    "Vellfire Evertt Crew Cab 1995": 15000,
+    "Vinnimade Heavy Rotator 2013": 45000,
+    "Vinnimade Heavy Wrecker 2013": 48000,
+}
+
+# Descuentos por volumen: a partir de N vehículos comprados se aplica este %.
+FLEET_QUANTITY_DISCOUNTS = [(20, 0.15), (10, 0.10), (5, 0.05)]
+
+
+def fleet_catalog_price(name: str):
+    """Devuelve el precio unitario oficial de un modelo del catálogo (None si no existe)."""
+    if not name:
+        return None
+    raw = str(name).strip().lower()
+    for model, price in FLEET_PRICES.items():
+        if model.lower() == raw:
+            return price
+    return None
+
+
+def fleet_discount_pct(cantidad: int) -> float:
+    """Porcentaje de descuento aplicable según la cantidad comprada."""
+    for minimum, pct in FLEET_QUANTITY_DISCOUNTS:
+        if cantidad >= minimum:
+            return pct
+    return 0.0
+
+
+def fleet_discount_text() -> str:
+    """Texto legible de los tramos de descuento por cantidad."""
+    return " • ".join(f"{n}+ vehículos: {int(p * 100)}%" for n, p in sorted(FLEET_QUANTITY_DISCOUNTS))
+
 
 class ApproveDepartmentAppModal(discord.ui.Modal):
     def __init__(self, app_id: str, dept_id: str, applicant_id: str):
@@ -750,6 +861,7 @@ class Departments(commands.Cog):
             e = department_embed(
                 f"{target['emoji']} Catálogo — {target['name']}",
                 "Modelos disponibles para adquirir con el presupuesto del departamento.\n"
+                f"🏷️ **Descuentos por volumen:** {fleet_discount_text()}\n"
                 "Usa `/flota comprar` con uno de los modelos listados."
             )
             self._add_catalog_fields(e, target["emoji"], target["name"], target["vehicles"])
@@ -758,6 +870,7 @@ class Departments(commands.Cog):
             e = department_embed(
                 "🚗 Catálogo de Vehículos Departamentales",
                 "Modelos disponibles para adquirir con el presupuesto de cada departamento.\n"
+                f"🏷️ **Descuentos por volumen:** {fleet_discount_text()}\n"
                 "Usa `/flota catalogo [categoria]` para filtrar por institución o `/flota comprar` para adquirir un modelo."
             )
             for key in FLEET_CATALOG:
@@ -792,7 +905,13 @@ class Departments(commands.Cog):
         """Agrega los modelos del catálogo en campos del embed, dividiéndolos para respetar el límite de 1024 caracteres."""
         for i in range(0, len(vehicles), chunk_size):
             chunk = vehicles[i:i + chunk_size]
-            lines = [f"• {v}" for v in chunk]
+            lines = []
+            for v in chunk:
+                price = fleet_catalog_price(v)
+                if price is not None:
+                    lines.append(f"• {v} — {format_currency(price)}")
+                else:
+                    lines.append(f"• {v}")
             if i == 0:
                 title = f"{emoji} {dept_name} ({len(vehicles)} modelos)"
             else:
@@ -822,19 +941,32 @@ class Departments(commands.Cog):
             return
 
         vtype = await aexecute("SELECT * FROM fleet_vehicle_types WHERE guild_id=$1 AND name ILIKE $2 LIMIT 1", (str(interaction.guild_id), f"%{tipo}%"), fetch="one")
+        catalog_price = fleet_catalog_price(tipo.strip())
+        if catalog_price is None:
+            raw_tipo = tipo.strip().lower()
+            for model, price in FLEET_PRICES.items():
+                if raw_tipo and (raw_tipo in model.lower() or model.lower() in raw_tipo):
+                    catalog_price = price
+                    break
         if vtype:
-            unit_price = float(valor_unitario if valor_unitario is not None else vtype.get("price", 0))
+            base_price = float(valor_unitario if valor_unitario is not None else (catalog_price if catalog_price is not None else vtype.get("price", 0)))
             vehicle_type_id = vtype["id"]
             vehicle_type_name = vtype["name"]
         else:
-            if valor_unitario is None:
+            if valor_unitario is not None:
+                base_price = float(valor_unitario)
+            elif catalog_price is not None:
+                base_price = float(catalog_price)
+            else:
                 await interaction.followup.send(embed=error_embed("Falta el valor", "Indica el valor por unidad para registrar este modelo"), ephemeral=True)
                 return
-            unit_price = float(valor_unitario)
             vehicle_type_id = generate_id()
             vehicle_type_name = tipo
 
-        total = round(unit_price * cantidad, 2)
+        unit_price = base_price
+        discount_pct = fleet_discount_pct(cantidad)
+        subtotal = round(unit_price * cantidad, 2)
+        total = round(subtotal * (1 - discount_pct), 2)
         if float(dept.get("budget", 0)) < total:
             await interaction.followup.send(embed=error_embed("Presupuesto insuficiente", f"El departamento requiere {format_currency(total)} pero solo tiene {format_currency(dept.get('budget',0))}"), ephemeral=True)
             return
@@ -858,10 +990,15 @@ class Departments(commands.Cog):
             )
 
         emoji = DEPT_EMOJI.get(dept.get("acronym", "").upper(), "🏢")
+        discount_line = ""
+        if discount_pct > 0:
+            discount_line = f"**Descuento por volumen ({int(discount_pct * 100)}%):** -{format_currency(round(subtotal - total, 2))}\n"
         await interaction.followup.send(embed=success_embed(
             f"{emoji} Flota Adquirida",
-            f"**{vehicle_type_name}** x{cantidad}\n"
+            f"**{vehicle_type_name}** x{cantidad} — Precio unitario: {format_currency(unit_price)}\n"
             f"**Placas:** {', '.join(f'`{p}`' for p in plates[:5])}{'...' if len(plates) > 5 else ''}\n"
+            f"**Subtotal:** {format_currency(subtotal)}\n"
+            f"{discount_line}"
             f"**Total abonado del presupuesto:** {format_currency(total)}"
         ))
 
