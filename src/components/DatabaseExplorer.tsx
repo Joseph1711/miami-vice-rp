@@ -653,7 +653,9 @@ export function DatabaseExplorer() {
                             <div className="flex items-center gap-1.5">
                               <span>{c.name}</span>
                               {c.pk === 1 && (
-                                <Key className="w-3 h-3 text-amber-400 shrink-0" title="Primary Key" />
+                                <span title="Primary Key" className="inline-flex items-center">
+                                  <Key className="w-3 h-3 text-amber-400 shrink-0" />
+                                </span>
                               )}
                               <span className="text-[10px] text-slate-500 font-normal">
                                 ({c.type})

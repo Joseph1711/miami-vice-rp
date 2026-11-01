@@ -12,6 +12,7 @@ from bot.services.server_status import (
     get_server_status,
     set_server_status,
     create_server_vote,
+    get_vote_by_id,
     get_active_vote_by_message,
     get_active_vote_by_guild,
     get_latest_vote_for_guild,
@@ -67,25 +68,66 @@ class VoteView(discord.ui.View):
     async def vote_remove(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self._handle_remove_vote(interaction)
 
-    def _current_vote_id(self) -> str:
-        """Devuelve el ID real de la votación incluso si la vista fue reconstruida tras un reinicio."""
-        return self.vote_id
+    async def _resolve_vote(self, interaction: discord.Interaction) -> dict:
+        """
+        Resuelve de forma dinámica e infalible la votación activa:
+        1. Por ID directo almacenado en la vista (si existe y no es 'pending').
+        2. Por message.id del mensaje que originó la interacción.
+        3. Por guild_id del servidor donde se interactuó.
+        """
+        # 1. Por ID en memoria de la vista
+        if self.vote_id and self.vote_id != "pending":
+            vote = await get_vote_by_id(self.vote_id)
+            if vote and vote.get("status") == "active":
+                return vote
+
+        # 2. Por message_id de la interacción
+        if interaction.message:
+            vote = await get_active_vote_by_message(str(interaction.message.id))
+            if vote:
+                self.vote_id = vote["id"]
+                return vote
+
+        # 3. Fallback: votación activa del servidor actual
+        if interaction.guild_id:
+            vote = await get_active_vote_by_guild(str(interaction.guild_id))
+            if vote:
+                self.vote_id = vote["id"]
+                return vote
+
+        return None
 
     async def _handle_vote(self, interaction: discord.Interaction, choice: str):
         uid = str(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
 
-        vote_id = self._current_vote_id()
-        if vote_id in (None, "pending"):
-            await interaction.followup.send("⏳ La votación aún se está registrando, intenta de nuevo en un momento.", ephemeral=True)
+        vote = await self._resolve_vote(interaction)
+        if not vote:
+            await interaction.followup.send(
+                "ℹ️ No se encontró ninguna votación de apertura activa para este mensaje o ya ha finalizado.",
+                ephemeral=True
+            )
+            return
+
+        vote_id = vote["id"]
+
+        # Verificar si la votación ya expiró
+        ends_at = parse_db_datetime(vote.get("ends_at"))
+        if ends_at and ends_at < datetime.datetime.utcnow():
+            await interaction.followup.send(
+                "⏳ Esta votación ya ha finalizado. Los resultados serán publicados por el temporizador o Staff.",
+                ephemeral=True
+            )
             return
 
         # Registrar o actualizar voto (1 voto por usuario)
         await record_user_vote(vote_id, uid, choice)
-        # Si el usuario había retirado su voto antes, ya cuenta como votante activo nuevamente
+
+        # Consultar conteo actualizado
         res = await get_vote_results(vote_id)
 
-        await self._refresh_live_embed(interaction, res)
+        # Actualizar el embed en el mensaje original en vivo (sin re-instanciar view para no invalidar botones)
+        await self._refresh_live_embed(interaction, vote, res)
 
         choice_text = "🟢 **Sí — Abrir servidor**" if choice == "yes" else "🔴 **No — Mantener cerrado**"
         await interaction.followup.send(
@@ -98,12 +140,15 @@ class VoteView(discord.ui.View):
         uid = str(interaction.user.id)
         await interaction.response.defer(ephemeral=True)
 
-        vote_id = self._current_vote_id()
-        if vote_id in (None, "pending"):
-            await interaction.followup.send("⏳ La votación aún se está registrando, intenta de nuevo en un momento.", ephemeral=True)
+        vote = await self._resolve_vote(interaction)
+        if not vote:
+            await interaction.followup.send(
+                "ℹ️ No hay una votación activa registrada para retirar votos.",
+                ephemeral=True
+            )
             return
 
-        res = await get_vote_results(vote_id)
+        vote_id = vote["id"]
         existing = await get_vote_voters(vote_id)
         had_vote = uid in existing["total_voters"]
 
@@ -118,23 +163,27 @@ class VoteView(discord.ui.View):
         await record_vote_removal(vote_id, uid)
 
         new_res = await get_vote_results(vote_id)
-        await self._refresh_live_embed(interaction, new_res)
+        await self._refresh_live_embed(interaction, vote, new_res)
 
         await interaction.followup.send(
             f"🗑️ Tu voto ha sido **retirado** correctamente.\n"
-            f"*Conteo actualizada:* 🟢 {new_res['yes']} | 🔴 {new_res['no']} (Total: {new_res['total']})",
+            f"*Conteo actualizado:* 🟢 {new_res['yes']} | 🔴 {new_res['no']} (Total: {new_res['total']})",
             ephemeral=True
         )
 
     async def _show_voters(self, interaction: discord.Interaction):
         """Muestra en tiempo real quiénes han votado y quiénes retiraron su voto."""
-        vote_id = self._current_vote_id()
         await interaction.response.defer(ephemeral=True)
 
-        if vote_id in (None, "pending"):
-            await interaction.followup.send("⏳ Aún no hay una votación activa registrada.", ephemeral=True)
+        vote = await self._resolve_vote(interaction)
+        if not vote:
+            await interaction.followup.send(
+                "ℹ️ Aún no hay una votación activa registrada o ya ha concluido.",
+                ephemeral=True
+            )
             return
 
+        vote_id = vote["id"]
         voters_info = await get_vote_voters(vote_id)
         removals = await get_vote_removals(vote_id)
         res = await get_vote_results(vote_id)
@@ -194,7 +243,7 @@ class VoteView(discord.ui.View):
         ends_display = f"<t:{int(ends_at.timestamp())}:R> (<t:{int(ends_at.timestamp())}:T>)" if ends_at else "En breve"
 
         voters_info = None
-        if vote:
+        if vote and vote.get("id") and vote["id"] != "pending":
             try:
                 voters_info = await get_vote_voters(vote["id"])
             except Exception:
@@ -212,9 +261,9 @@ class VoteView(discord.ui.View):
             color=0x00E5FF
         )
 
-        embed.add_field(name="🟢 A favor", value=f"**{results['yes']}**", inline=True)
-        embed.add_field(name="🔴 En contra", value=f"**{results['no']}**", inline=True)
-        embed.add_field(name="📊 Total", value=f"**{results['total']}**", inline=True)
+        embed.add_field(name="🟢 A favor", value=f"**{results.get('yes', 0)}**", inline=True)
+        embed.add_field(name="🔴 En contra", value=f"**{results.get('no', 0)}**", inline=True)
+        embed.add_field(name="📊 Total", value=f"**{results.get('total', 0)}**", inline=True)
 
         if voters_info and voters_info["total"] > 0:
             yes_mentions = _format_voters_display(voters_info["yes_voters"], max_chars=260)
@@ -236,15 +285,32 @@ class VoteView(discord.ui.View):
         embed.timestamp = discord.utils.utcnow()
         return embed
 
-    async def _refresh_live_embed(self, interaction: discord.Interaction, results: dict):
-        """Actualiza el embed del mensaje de votación con los conteos y votantes en vivo."""
+    async def _refresh_live_embed(self, interaction: discord.Interaction, vote: dict, results: dict):
+        """
+        Actualiza el embed del mensaje de votación con los conteos y votantes en vivo.
+        IMPORTANTE: No sustituye la 'view' para no desasociar los event listeners ni fallar en discord.py.
+        """
         try:
-            vote = await get_active_vote_by_message(str(interaction.message.id))
-            if not vote:
-                return
-            embed = await self._build_vote_embed(vote, results, getattr(interaction, "guild", None))
-            fresh_view = VoteView(vote_id=self._current_vote_id(), bot=self.bot)
-            await interaction.message.edit(embed=embed, view=fresh_view)
+            guild = getattr(interaction, "guild", None)
+            embed = await self._build_vote_embed(vote, results, guild)
+
+            # 1. Intentar editar el mensaje asociado a la interacción
+            if interaction.message:
+                try:
+                    await interaction.message.edit(embed=embed)
+                    return
+                except Exception as edit_err:
+                    logger.debug(f"No se pudo editar interaction.message directamente: {edit_err}")
+
+            # 2. Fallback: buscar el mensaje por canal y message_id
+            channel = interaction.channel or (guild.get_channel(int(vote["channel_id"])) if guild and vote.get("channel_id") else None)
+            if channel and vote.get("message_id"):
+                try:
+                    target_msg = await channel.fetch_message(int(vote["message_id"]))
+                    if target_msg:
+                        await target_msg.edit(embed=embed)
+                except Exception as fetch_err:
+                    logger.warning(f"Fallback fetch_message falló para mensaje {vote.get('message_id')}: {fetch_err}")
         except Exception as e:
             logger.error(f"Error actualizando embed en vivo de la votación: {e}", exc_info=True)
 
@@ -256,6 +322,14 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         self.bot = bot
         self._registered_view_messages = set()
         self.check_expired_votes.start()
+
+    async def cog_load(self):
+        """Registra la vista global de votación para garantizar que todos los botones funcionen siempre."""
+        try:
+            self.bot.add_view(VoteView(bot=self.bot))
+            logger.info("Vista global persistente de votación registrada exitosamente")
+        except Exception as e:
+            logger.warning(f"No se pudo registrar la vista global de votación en cog_load: {e}")
 
     def cog_unload(self):
         self.check_expired_votes.cancel()
@@ -273,12 +347,15 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
                 fetch="all"
             ) or []
             for vote in active_votes:
-                msg_id = int(vote["message_id"])
-                if msg_id in self._registered_view_messages:
-                    continue
-                view = VoteView(vote_id=vote["id"], bot=self.bot)
-                self.bot.add_view(view, message_id=msg_id)
-                self._registered_view_messages.add(msg_id)
+                try:
+                    msg_id = int(vote["message_id"])
+                    if msg_id in self._registered_view_messages:
+                        continue
+                    view = VoteView(vote_id=vote["id"], bot=self.bot)
+                    self.bot.add_view(view, message_id=msg_id)
+                    self._registered_view_messages.add(msg_id)
+                except Exception as inner_err:
+                    logger.warning(f"Error registrando vista para mensaje {vote.get('message_id')}: {inner_err}")
             if active_votes:
                 logger.info(f"Registradas {len(active_votes)} vistas de votación persistentes")
         except Exception as e:
@@ -597,13 +674,17 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
         target_channel = canal or interaction.channel
         dur = max(1, min(1440, duracion_minutos))
 
+        from bot.helpers import generate_id
+
         ends_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=dur)
         empty_results = {"yes": 0, "no": 0, "total": 0, "winner": "tie"}
-        placeholder_vote = {"ends_at": ends_at}
+        
+        # Pre-generar el ID real para evitar cualquier estado 'pending' o desincronización
+        real_vote_id = generate_id()
+        placeholder_vote = {"id": real_vote_id, "ends_at": ends_at}
 
-        # Enviar mensaje con botones interactivos (sin reacciones)
-        dummy_vote_id = "pending"
-        vote_view = VoteView(vote_id=dummy_vote_id, bot=self.bot)
+        # Enviar mensaje con botones interactivos y ID real asignado de antemano
+        vote_view = VoteView(vote_id=real_vote_id, bot=self.bot)
 
         # Crear Embed con el formato oficial (conteos en tiempo real y botones)
         embed = await vote_view._build_vote_embed(placeholder_vote, empty_results, interaction.guild)
@@ -614,19 +695,18 @@ class ServerControl(commands.Cog, name="Control de Servidor"):
             view=vote_view
         )
 
-        # Crear registro en la base de datos
+        # Crear registro en la base de datos vinculado al mensaje y al ID ya asignado
         vote_data = await create_server_vote(
             guild_id=gid,
             channel_id=str(target_channel.id),
             message_id=str(msg.id),
             creator_id=str(interaction.user.id),
-            duration_minutes=dur
+            duration_minutes=dur,
+            vote_id=real_vote_id,
+            ends_at=ends_at
         )
 
-        # Vincular el ID real de la votación con la vista de botones
-        vote_view.vote_id = vote_data["id"]
-
-        # Registrar la vista como persistente para que sobreviva a reinicios del bot
+        # Registrar la vista como persistente con message_id para sobrevivir a reinicios
         try:
             self.bot.add_view(vote_view, message_id=msg.id)
             self._registered_view_messages.add(msg.id)

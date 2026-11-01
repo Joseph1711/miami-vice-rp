@@ -68,11 +68,15 @@ async def create_server_vote(
     channel_id: str,
     message_id: str,
     creator_id: str,
-    duration_minutes: int = 5
+    duration_minutes: int = 5,
+    vote_id: str = None,
+    ends_at: datetime.datetime = None
 ) -> dict:
     """Crea un nuevo registro de votación en la base de datos."""
-    vote_id = generate_id()
-    ends_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=max(1, duration_minutes))
+    if not vote_id:
+        vote_id = generate_id()
+    if not ends_at:
+        ends_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=max(1, duration_minutes))
     
     # Cancelar/cerrar votaciones activas previas en el mismo servidor
     await aexecute(
@@ -83,11 +87,11 @@ async def create_server_vote(
     await aexecute(
         """INSERT INTO server_votes (id, guild_id, channel_id, message_id, creator_id, status, duration_minutes, ends_at, created_at)
            VALUES ($1, $2, $3, $4, $5, 'active', $6, $7, NOW())""",
-        (vote_id, str(guild_id), str(channel_id), str(message_id), str(creator_id), duration_minutes, ends_at)
+        (str(vote_id), str(guild_id), str(channel_id), str(message_id), str(creator_id), duration_minutes, ends_at)
     )
 
     return {
-        "id": vote_id,
+        "id": str(vote_id),
         "guild_id": str(guild_id),
         "channel_id": str(channel_id),
         "message_id": str(message_id),
@@ -98,8 +102,22 @@ async def create_server_vote(
     }
 
 
+async def get_vote_by_id(vote_id: str) -> dict:
+    """Busca una votación por su ID único."""
+    if not vote_id or vote_id == "pending":
+        return None
+    row = await aexecute(
+        "SELECT * FROM server_votes WHERE id = $1",
+        (str(vote_id),),
+        fetch="one"
+    )
+    return dict(row) if row else None
+
+
 async def get_active_vote_by_message(message_id: str) -> dict:
     """Busca una votación activa por el ID del mensaje de Discord."""
+    if not message_id:
+        return None
     row = await aexecute(
         "SELECT * FROM server_votes WHERE message_id = $1 AND status = 'active'",
         (str(message_id),),
@@ -110,6 +128,8 @@ async def get_active_vote_by_message(message_id: str) -> dict:
 
 async def get_active_vote_by_guild(guild_id: str) -> dict:
     """Busca la votación activa actual de un servidor."""
+    if not guild_id:
+        return None
     row = await aexecute(
         "SELECT * FROM server_votes WHERE guild_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1",
         (str(guild_id),),
@@ -131,6 +151,11 @@ async def record_user_vote(vote_id: str, discord_id: str, choice: str):
            SET choice = EXCLUDED.choice,
                created_at = NOW()""",
         (str(vote_id), str(discord_id), norm_choice)
+    )
+    # Si el usuario había retirado su voto previamente, limpiar de la lista de retirados
+    await aexecute(
+        "DELETE FROM server_vote_removals WHERE vote_id = $1 AND discord_id = $2",
+        (str(vote_id), str(discord_id))
     )
 
 
@@ -159,54 +184,6 @@ async def get_vote_removals(vote_id: str) -> list:
         fetch="all"
     ) or []
     return [{"discord_id": str(r["discord_id"]), "removed_at": r.get("removed_at")} for r in rows]
-
-
-async def get_vote_results(vote_id: str) -> dict:
-    """Calcula el conteo de votos a favor, en contra y el total."""
-    rows = await aexecute(
-        "SELECT choice, COUNT(*) as count FROM server_vote_entries WHERE vote_id = $1 GROUP BY choice",
-        (str(vote_id),),
-        fetch="all"
-    ) or []
-    
-    yes_count = 0
-    no_count = 0
-    for r in rows:
-        c = str(r.get("choice", "")).lower()
-        cnt = int(r.get("count", 0))
-        if c == "yes":
-            yes_count += cnt
-        elif c == "no":
-            no_count += cnt
-
-    total = yes_count + no_count
-    return {
-        "yes": yes_count,
-        "no": no_count,
-        "total": total,
-        "winner": "yes" if yes_count > no_count else ("no" if no_count > yes_count else "tie")
-    }
-
-
-async def close_server_vote(vote_id: str) -> dict:
-    """Marca la votación como cerrada y devuelve los resultados finales."""
-    await aexecute(
-        "UPDATE server_votes SET status = 'closed' WHERE id = $1",
-        (str(vote_id),)
-    )
-    return await get_vote_results(vote_id)
-
-
-async def get_latest_vote_for_guild(guild_id: str) -> dict:
-    """
-    Obtiene la votación más reciente del servidor (ya sea activa, cerrada o concluida).
-    """
-    row = await aexecute(
-        "SELECT * FROM server_votes WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1",
-        (str(guild_id),),
-        fetch="one"
-    )
-    return dict(row) if row else None
 
 
 async def get_vote_voters(vote_id: str) -> dict:
@@ -239,3 +216,45 @@ async def get_vote_voters(vote_id: str) -> dict:
         "no_count": len(no_voters),
         "total": len(total_voters)
     }
+
+
+async def get_vote_results(vote_id: str) -> dict:
+    """
+    Calcula el conteo de votos a favor, en contra y el total directamente
+    sincronizado con get_vote_voters para garantizar consistencia total del contador.
+    """
+    voters = await get_vote_voters(vote_id)
+    yes_count = voters["yes_count"]
+    no_count = voters["no_count"]
+    total = voters["total"]
+    winner = "yes" if yes_count > no_count else ("no" if no_count > yes_count else "tie")
+    return {
+        "yes": yes_count,
+        "no": no_count,
+        "total": total,
+        "winner": winner,
+        "yes_voters": voters["yes_voters"],
+        "no_voters": voters["no_voters"],
+        "total_voters": voters["total_voters"]
+    }
+
+
+async def close_server_vote(vote_id: str) -> dict:
+    """Marca la votación como cerrada y devuelve los resultados finales."""
+    await aexecute(
+        "UPDATE server_votes SET status = 'closed' WHERE id = $1",
+        (str(vote_id),)
+    )
+    return await get_vote_results(vote_id)
+
+
+async def get_latest_vote_for_guild(guild_id: str) -> dict:
+    """
+    Obtiene la votación más reciente del servidor (ya sea activa, cerrada o concluida).
+    """
+    row = await aexecute(
+        "SELECT * FROM server_votes WHERE guild_id = $1 ORDER BY created_at DESC LIMIT 1",
+        (str(guild_id),),
+        fetch="one"
+    )
+    return dict(row) if row else None
