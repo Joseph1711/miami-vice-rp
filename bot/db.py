@@ -296,6 +296,18 @@ def _pg_migration_statements() -> list:
             discord_id TEXT NOT NULL,
             removed_at TIMESTAMP DEFAULT NOW()
         )""",
+        """CREATE TABLE IF NOT EXISTS server_webhooks (
+            id TEXT PRIMARY KEY,
+            guild_id TEXT NOT NULL,
+            category TEXT NOT NULL,
+            target_id TEXT,
+            webhook_url TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )""",
+        "ALTER TABLE departments ADD COLUMN IF NOT EXISTS webhook_url TEXT",
+        "ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS webhook_fines_url TEXT",
+        "ALTER TABLE guild_config ADD COLUMN IF NOT EXISTS webhook_arrests_url TEXT",
         # --- EMPLEOS PUBLICOS (tabla `jobs` heredada + asignaciones) ---
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS role_id TEXT",
         "ALTER TABLE jobs ADD COLUMN IF NOT EXISTS description TEXT DEFAULT ''",
@@ -931,6 +943,19 @@ def _ensure_schema_migrations(conn):
                 removed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
             """)
+            conn.execute("""
+            CREATE TABLE IF NOT EXISTS server_webhooks (
+                id TEXT PRIMARY KEY,
+                guild_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                target_id TEXT,
+                webhook_url TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            _sqlite_add_missing_columns(conn, "departments", [("webhook_url", "TEXT")])
+            _sqlite_add_missing_columns(conn, "guild_config", [("webhook_fines_url", "TEXT"), ("webhook_arrests_url", "TEXT")])
             conn.commit()
     except Exception as e:
         logger.debug(f"[DB] Migration check notice: {e}")

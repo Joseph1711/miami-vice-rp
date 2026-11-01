@@ -256,6 +256,14 @@ class Police(commands.Cog, name="Policía & Justicia"):
 
         await interaction.followup.send(**send_kwargs)
 
+        # Enviar registro formal al webhook de arrestos configurado
+        try:
+            from bot.services.webhooks import send_arrest_webhook
+            wh_embed = e.to_dict()
+            await send_arrest_webhook(gid, wh_embed)
+        except Exception as wh_err:
+            logger.warning(f"[Police] Error enviando registro de arresto a webhook: {wh_err}")
+
     @policia.command(name="multar", description="Emitir y cobrar una multa de tránsito o infracción a un ciudadano (Solo Policía)")
     @app_commands.describe(
         ciudadano="Ciudadano al que se le aplicará la infracción",
@@ -344,6 +352,14 @@ class Police(commands.Cog, name="Policía & Justicia"):
         e.set_footer(text=f"Folio #{rec_id[:8].upper()} • Tránsito & Seguridad Pública")
 
         await interaction.followup.send(content=f"{ciudadano.mention}", embed=e)
+
+        # Enviar registro formal al webhook de multas configurado
+        try:
+            from bot.services.webhooks import send_fine_webhook
+            wh_embed = e.to_dict()
+            await send_fine_webhook(gid, wh_embed)
+        except Exception as wh_err:
+            logger.warning(f"[Police] Error enviando registro de multa a webhook: {wh_err}")
 
     @policia.command(name="antecedentes", description="Consultar el historial penal, arrestos y multas de un ciudadano (Solo Policía)")
     @app_commands.describe(ciudadano="Ciudadano a consultar antecedentes")
@@ -680,6 +696,135 @@ class Police(commands.Cog, name="Policía & Justicia"):
         e.set_footer(text=f"Expediente #{arrest_record['id'][:8].upper()} • Estado: LIBERADO BAJO FIANZA 🔓")
 
         await interaction.followup.send(content=f"{target.mention}", embed=e)
+
+    # =========================================================================
+    # COMANDOS DE CONFIGURACIÓN DE WEBHOOKS POLICIALES
+    # =========================================================================
+    @policia.command(name="webhook_multas", description="Configurar webhook para registro automático de multas de tránsito (Admin/Policía)")
+    @app_commands.describe(url="URL completa del webhook de Discord (o escribe 'eliminar' para desactivarlo)")
+    async def webhook_multas(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_police_authorized(interaction) and not await check_admin_permission(interaction):
+            await interaction.followup.send(
+                embed=error_embed("Acceso Denegado 👮", "No tienes permisos para configurar los webhooks policiales."),
+                ephemeral=True
+            )
+            return
+
+        from bot.services.webhooks import set_webhook_url, remove_webhook_url, get_webhook_url
+        gid = str(interaction.guild_id)
+        clean_url = url.strip()
+
+        if clean_url.lower() in ("eliminar", "borrar", "quitar", "disable", "none", "ninguno"):
+            await remove_webhook_url(gid, "fines")
+            await interaction.followup.send(
+                embed=success_embed("Webhook de Multas Desactivado", "Se ha eliminado el webhook de registro de multas."),
+                ephemeral=True
+            )
+            return
+
+        ok, msg = await set_webhook_url(gid, "fines", clean_url)
+        if ok:
+            # Probar webhook con mensaje informativo de prueba
+            from bot.services.webhooks import send_discord_webhook
+            test_embed = info_embed(
+                "🟢 Webhook de Registro de Multas Configurado",
+                f"Este canal ha sido vinculado exitosamente para recibir los registros oficiales de multas e infracciones de Miami Vice RP.\n\n"
+                f"**Configurado por:** {interaction.user.mention}\n"
+                f"**Servidor:** {interaction.guild.name}"
+            )
+            await send_discord_webhook(
+                webhook_url=clean_url,
+                embeds=[test_embed],
+                username="Policía Miami Vice • Registro de Multas"
+            )
+            await interaction.followup.send(
+                embed=success_embed("Webhook Configurado ✅", f"El webhook para **registro de multas** ha sido guardado exitosamente.\nSe ha enviado un mensaje de verificación al canal del webhook."),
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                embed=error_embed("Error en Webhook ❌", msg),
+                ephemeral=True
+            )
+
+    @policia.command(name="webhook_arrestos", description="Configurar webhook para registro automático de arrestos policiales (Admin/Policía)")
+    @app_commands.describe(url="URL completa del webhook de Discord (o escribe 'eliminar' para desactivarlo)")
+    async def webhook_arrestos(self, interaction: discord.Interaction, url: str):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_police_authorized(interaction) and not await check_admin_permission(interaction):
+            await interaction.followup.send(
+                embed=error_embed("Acceso Denegado 👮", "No tienes permisos para configurar los webhooks policiales."),
+                ephemeral=True
+            )
+            return
+
+        from bot.services.webhooks import set_webhook_url, remove_webhook_url, get_webhook_url
+        gid = str(interaction.guild_id)
+        clean_url = url.strip()
+
+        if clean_url.lower() in ("eliminar", "borrar", "quitar", "disable", "none", "ninguno"):
+            await remove_webhook_url(gid, "arrests")
+            await interaction.followup.send(
+                embed=success_embed("Webhook de Arrestos Desactivado", "Se ha eliminado el webhook de registro de arrestos."),
+                ephemeral=True
+            )
+            return
+
+        ok, msg = await set_webhook_url(gid, "arrests", clean_url)
+        if ok:
+            from bot.services.webhooks import send_discord_webhook
+            test_embed = info_embed(
+                "🚨 Webhook de Registro de Arrestos Configurado",
+                f"Este canal ha sido vinculado exitosamente para recibir los informes de arresto y fichajes penitenciarios de Miami Vice RP.\n\n"
+                f"**Configurado por:** {interaction.user.mention}\n"
+                f"**Servidor:** {interaction.guild.name}"
+            )
+            await send_discord_webhook(
+                webhook_url=clean_url,
+                embeds=[test_embed],
+                username="Sistema Penitenciario • Registro de Arrestos"
+            )
+            await interaction.followup.send(
+                embed=success_embed("Webhook Configurado ✅", f"El webhook para **registro de arrestos** ha sido guardado exitosamente.\nSe ha enviado un mensaje de verificación al canal del webhook."),
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(
+                embed=error_embed("Error en Webhook ❌", msg),
+                ephemeral=True
+            )
+
+    @policia.command(name="webhooks_ver", description="Ver el estado de los webhooks de registro policial configurados")
+    async def webhooks_ver(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await is_police_authorized(interaction) and not await check_admin_permission(interaction):
+            await interaction.followup.send(
+                embed=error_embed("Acceso Denegado 👮", "No tienes permisos para consultar los webhooks policiales."),
+                ephemeral=True
+            )
+            return
+
+        from bot.services.webhooks import get_webhook_url
+        gid = str(interaction.guild_id)
+        fines_url = await get_webhook_url(gid, "fines")
+        arrests_url = await get_webhook_url(gid, "arrests")
+
+        e = info_embed("📡 Webhooks Policiales de Miami Vice RP")
+        e.description = "Configuración actual de registros externos por webhook para sanciones y detenciones:\n"
+
+        def _mask(u):
+            if not u:
+                return "❌ *No configurado*"
+            parts = u.split("/")
+            if len(parts) >= 2:
+                return f"✅ `.../{parts[-2]}/{parts[-1][:6]}***`"
+            return "✅ *Configurado*"
+
+        e.add_field(name="📄 Registro de Multas", value=_mask(fines_url), inline=False)
+        e.add_field(name="🚨 Registro de Arrestos", value=_mask(arrests_url), inline=False)
+        e.set_footer(text="Usa /policia webhook_multas o /policia webhook_arrestos para modificar")
+        await interaction.followup.send(embed=e, ephemeral=True)
 
 
 async def setup(bot):

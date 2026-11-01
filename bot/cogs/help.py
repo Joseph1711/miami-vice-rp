@@ -61,6 +61,9 @@ HELP_CATEGORIES = {
             ("/policia pagar_multa [folio]", "Pagar y liquidar una multa pendiente (efectivo o banco)"),
             ("/policia pagar_fianza [ciudadano]", "Pagar la fianza judicial de un detenido para otorgarle libertad"),
             ("/policia configurar_roles roles", "Configurar roles de Discord autorizados para usar comandos policiales (Admin)"),
+            ("/policia webhook_multas [url]", "Configurar webhook para registro automático de multas (o 'eliminar') (Admin)"),
+            ("/policia webhook_arrestos [url]", "Configurar webhook para registro automático de arrestos (o 'eliminar') (Admin)"),
+            ("/policia webhooks_ver", "Ver el estado de los webhooks de multas y arrestos (Admin)"),
         ]
     },
     "armas": {
@@ -103,11 +106,13 @@ HELP_CATEGORIES = {
         "commands": [
             ("/departamento lista", "Ver todos los departamentos oficiales activos"),
             ("/departamento info acronimo", "Ver información y presupuesto de un departamento"),
-            ("/departamento postular acronimo", "Enviar postulación detallada validando el acrónimo oficial"),
+            ("/departamento postular acronimo", "Te envía el formulario oficial por DM con botón interactivo"),
             ("/departamento mis_postulaciones", "Ver el estado de tus solicitudes de ingreso"),
             ("/departamento miembros acronimo", "Ver el roster de oficiales y miembros"),
             ("/departamento contratar @usuario acronimo", "Contratar o ascender a un miembro (Admin/Mandos)"),
             ("/departamento despedir @usuario acronimo", "Dar de baja a un miembro (Admin/Mandos)"),
+            ("/departamento webhook acronimo [url]", "Configurar webhook para postulaciones (menciona @everyone) (Admin/Mando)"),
+            ("/departamento webhooks_ver", "Ver los webhooks configurados para cada departamento (Admin/Mando)"),
             ("/flota ver acronimo", "Ver vehículos del departamento"),
             ("/flota catalogo [acronimo]", "Ver los vehículos disponibles para comprar en los departamentos"),
             ("/flota solicitar acronimo placa", "Solicitar un vehículo para patrullaje"),

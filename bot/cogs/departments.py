@@ -453,11 +453,44 @@ class DepartmentApplicationReviewView(discord.ui.View):
         await interaction.response.send_modal(modal)
 
 
-class DepartmentApplicationModal(discord.ui.Modal):
-    def __init__(self, dept: dict):
-        acronym = dept.get("acronym", "").upper()
-        super().__init__(title=f"Postulación a {acronym} — {dept['name'][:25]}")
+class DepartmentDMApplicationView(discord.ui.View):
+    """Vista interactiva enviada a los Mensajes Directos (DM) del postulante."""
+    def __init__(self, dept: dict = None, guild_id: str = None):
+        super().__init__(timeout=None)
         self.dept = dept
+        self.guild_id = guild_id
+        if dept and guild_id:
+            btn = discord.ui.Button(
+                label="Llenar Formulario de Ingreso",
+                style=discord.ButtonStyle.success,
+                emoji="📝",
+                custom_id=f"btn_dept_app:{dept['id']}:{guild_id}"
+            )
+            btn.callback = self.open_modal_callback
+            self.add_item(btn)
+
+    async def open_modal_callback(self, interaction: discord.Interaction):
+        custom_id = interaction.data.get("custom_id", "")
+        parts = custom_id.split(":")
+        if len(parts) >= 3:
+            dept_id = parts[1]
+            gid = parts[2]
+            dept = await aexecute("SELECT * FROM departments WHERE id=$1", (dept_id,), fetch="one")
+            if dept:
+                modal = DepartmentApplicationModal(dept, gid)
+                await interaction.response.send_modal(modal)
+                return
+        if self.dept and self.guild_id:
+            modal = DepartmentApplicationModal(self.dept, self.guild_id)
+            await interaction.response.send_modal(modal)
+
+
+class DepartmentApplicationModal(discord.ui.Modal):
+    def __init__(self, dept: dict, guild_id: str):
+        acronym = dept.get("acronym", "").upper()
+        super().__init__(title=f"Postulación {acronym} — {dept['name'][:20]}")
+        self.dept = dept
+        self.guild_id = str(guild_id)
 
         self.age_avail = discord.ui.TextInput(
             label="Edad IC / OOC y Disponibilidad Horaria",
@@ -497,7 +530,7 @@ class DepartmentApplicationModal(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
 
         app_id = generate_id()
-        gid = str(interaction.guild_id)
+        gid = str(self.guild_id or interaction.guild_id or "")
         uid = str(interaction.user.id)
         acronym = self.dept.get("acronym", "").upper()
 
@@ -510,28 +543,20 @@ class DepartmentApplicationModal(discord.ui.Modal):
             (app_id, gid, uid, acronym, combined_exp, combined_mot)
         )
 
-        # Notify review channel
-        cfg = await aexecute("SELECT * FROM guild_config WHERE guild_id=$1", (gid,), fetch="one")
-        app_channel_id = None
-        if cfg:
-            app_channel_id = cfg.get("applications_channel_id") or cfg.get("log_channel_id")
-
-        if not app_channel_id:
-            # Check application_config fallback
-            app_cfg = await aexecute("SELECT log_channel_id FROM application_config WHERE guild_id=$1", (gid,), fetch="one")
-            if app_cfg:
-                app_channel_id = app_cfg.get("log_channel_id")
-
-        channel = None
-        if app_channel_id:
-            channel = interaction.guild.get_channel(int(app_channel_id))
+        # Buscar DNI del postulante si existe para informe completo
+        dni_rec = await aexecute(
+            "SELECT dni_number, full_name FROM dni_records WHERE guild_id=$1 AND discord_id=$2 ORDER BY is_active DESC, created_at DESC LIMIT 1",
+            (gid, uid), fetch="one"
+        )
+        dni_info = f"**{dni_rec['full_name']}** (`{dni_rec['dni_number']}`)" if dni_rec else "Sin DNI registrado"
 
         emoji = DEPT_EMOJI.get(acronym, "🏛️")
         rev_emb = info_embed(
             f"📋 Nueva Solicitud Oficial de Ingreso — {emoji} {self.dept['name']} [{acronym}]",
             f"**Postulante:** {interaction.user.mention} (`{interaction.user.name}`)\n"
             f"**ID de Discord:** `{interaction.user.id}`\n"
-            f"**ID de Postulación:** `{app_id[:8]}`"
+            f"**Identidad IC:** {dni_info}\n"
+            f"**ID de Postulación:** `#{app_id[:8].upper()}`"
         )
         rev_emb.add_field(name="🕒 Edad & Disponibilidad Horaria", value=self.age_avail.value[:300], inline=False)
         rev_emb.add_field(name="🎖️ Experiencia Previa en Rol", value=self.experience.value[:600], inline=False)
@@ -539,19 +564,48 @@ class DepartmentApplicationModal(discord.ui.Modal):
         rev_emb.add_field(name="🚨 Caso Práctico / Actuación", value=self.scenario.value[:600], inline=False)
         rev_emb.set_footer(text=f"Fecha: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} • ID: {app_id}")
 
-        view = DepartmentApplicationReviewView(app_id, self.dept["id"], uid, self.dept["name"])
+        # 1. ENVIAR AL WEBHOOK ESPECÍFICO DEL DEPARTAMENTO (CON MENCIÓN OBLIGATORIA A @everyone)
+        from bot.services.webhooks import send_department_application_webhook
+        wh_enviado = False
+        try:
+            wh_enviado = await send_department_application_webhook(
+                guild_id=gid,
+                dept=self.dept,
+                app_embed_dict=rev_emb.to_dict()
+            )
+        except Exception as wh_err:
+            logger.warning(f"[Departments] Error enviando webhook de postulación de {acronym}: {wh_err}")
 
-        if channel:
-            try:
-                await channel.send(embed=rev_emb, view=view)
-            except Exception:
-                pass
+        # 2. Notificar canal de revisión en el servidor principal si existe canal configurado
+        client = interaction.client
+        guild = client.get_guild(int(gid)) if gid and gid.isdigit() else interaction.guild
+        app_channel_id = None
+        if guild:
+            cfg = await aexecute("SELECT * FROM guild_config WHERE guild_id=$1", (gid,), fetch="one")
+            if cfg:
+                app_channel_id = cfg.get("applications_channel_id") or cfg.get("log_channel_id")
 
+            if not app_channel_id:
+                app_cfg = await aexecute("SELECT log_channel_id FROM application_config WHERE guild_id=$1", (gid,), fetch="one")
+                if app_cfg:
+                    app_channel_id = app_cfg.get("log_channel_id")
+
+            if app_channel_id:
+                channel = guild.get_channel(int(app_channel_id))
+                if channel:
+                    view = DepartmentApplicationReviewView(app_id, self.dept["id"], uid, self.dept["name"])
+                    try:
+                        await channel.send(embed=rev_emb, view=view)
+                    except Exception:
+                        pass
+
+        # 3. Confirmación formal al postulante
+        wh_info = "\n📢 **Notificación:** Tu expediente ha sido enviado mediante webhook a la agencia con mención a **@everyone** para ser evaluado y aceptado." if wh_enviado else ""
         await interaction.followup.send(embed=success_embed(
             "📬 Postulación Enviada con Éxito",
-            f"Tu solicitud para unirte al **{emoji} {self.dept['name']} [{acronym}]** ha sido registrada correctamente.\n\n"
-            f"Los altos mandos y administradores revisarán tus respuestas y recibirás una notificación cuando sea evaluada.\n"
-            f"**ID de Solicitud:** `{app_id[:8]}`"
+            f"Tu solicitud para unirte al **{emoji} {self.dept['name']} [{acronym}]** ha sido registrada correctamente.{wh_info}\n\n"
+            f"Los altos mandos y administradores evaluarán tus respuestas y recibirás una notificación cuando sea revisada.\n"
+            f"**Folio de Solicitud:** `#{app_id[:8].upper()}`"
         ), ephemeral=True)
 
 
@@ -652,8 +706,47 @@ class Departments(commands.Cog):
             ), ephemeral=True)
             return
 
-        modal = DepartmentApplicationModal(dept)
-        await interaction.response.send_modal(modal)
+        # Enviar formulario interactivo a los Mensajes Directos (DM) del usuario
+        gid = str(interaction.guild_id)
+        cleaned_acronym = dept.get("acronym", "").upper()
+        emoji = DEPT_EMOJI.get(cleaned_acronym, "🏛️")
+
+        dm_embed = info_embed(
+            f"📋 Formulario Oficial de Ingreso — {emoji} {dept['name']} [{cleaned_acronym}]",
+            f"¡Hola **{interaction.user.name}**!\n\n"
+            f"Has iniciado tu solicitud de ingreso oficial para unirte a **{dept['name']}** en **{interaction.guild.name}**.\n\n"
+            f"📌 **Instrucciones:**\n"
+            f"1. Presiona el botón verde de abajo **« 📝 Llenar Formulario de Ingreso »**.\n"
+            f"2. Completa tus datos de disponibilidad, experiencia y caso práctico con sinceridad.\n"
+            f"3. Al enviar, tu postulación se remitirá inmediatamente a la agencia vía webhook mencionando a **@everyone** para que los líderes y mandos evalúen tu solicitud y puedas ser aceptado.\n\n"
+            f"¡Mucho éxito en tu postulación!"
+        )
+        dm_embed.set_footer(text=f"Miami Vice RP • Servidor: {interaction.guild.name}")
+
+        dm_view = DepartmentDMApplicationView(dept, gid)
+        try:
+            await interaction.user.send(embed=dm_embed, view=dm_view)
+            await interaction.response.send_message(
+                embed=success_embed(
+                    "📩 Formulario Enviado a tus DMs",
+                    f"Te hemos enviado un mensaje privado (DM) con el formulario oficial de postulación para **{dept['name']} [{cleaned_acronym}]**.\n\n"
+                    f"👉 **Revisa tu chat privado con el bot** para completarlo y enviarlo a los mandos oficiales."
+                ),
+                ephemeral=True
+            )
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                embed=error_embed(
+                    "DMs Bloqueados 🔒",
+                    f"No pudimos enviarte el formulario a tus Mensajes Directos (DM).\n\n"
+                    f"**Para solucionarlo:**\n"
+                    f"1. Haz clic derecho en el servidor **{interaction.guild.name}** (o toca los tres puntos en móvil).\n"
+                    f"2. Ve a **Ajustes de Privacidad**.\n"
+                    f"3. Activa la opción **« Permitir mensajes directos de miembros del servidor »**.\n"
+                    f"4. Vuelve a ejecutar `/departamento postular {cleaned_acronym}`."
+                ),
+                ephemeral=True
+            )
 
     @departamento.command(name="postular", description="Enviar solicitud de ingreso a un departamento mediante su acrónimo")
     @app_commands.describe(acronimo="Acrónimo oficial del departamento al que deseas postular (ej: MPD, MDFR, FHP)")
@@ -1085,6 +1178,119 @@ class Departments(commands.Cog):
 
         await aexecute("UPDATE fleet_vehicles SET status=$1, assigned_to=NULL, updated_at=NOW() WHERE id=$2", (estado, vehicle["id"]))
         await interaction.followup.send(embed=success_embed("Estado de Flota Actualizado", f"**{vehicle['type_name']}** (Placa: `{vehicle['plate']}`) cambiado a **{estado}**"))
+
+    # =========================================================================
+    # LISTENER PARA BOTONES EN DM (SOBREVIVEN A REINICIOS)
+    # =========================================================================
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction: discord.Interaction):
+        """Maneja clics persistentes de botones de postulación recibidos en DM."""
+        if interaction.type == discord.InteractionType.component:
+            cid = interaction.data.get("custom_id", "")
+            if cid.startswith("btn_dept_app:"):
+                parts = cid.split(":")
+                if len(parts) >= 3:
+                    dept_id = parts[1]
+                    gid = parts[2]
+                    dept = await aexecute("SELECT * FROM departments WHERE id=$1", (dept_id,), fetch="one")
+                    if dept:
+                        modal = DepartmentApplicationModal(dept, gid)
+                        await interaction.response.send_modal(modal)
+
+    # =========================================================================
+    # COMANDOS DE CONFIGURACIÓN DE WEBHOOKS DE DEPARTAMENTOS
+    # =========================================================================
+    @departamento.command(name="webhook", description="Configurar webhook para recibir postulaciones de este departamento con @everyone")
+    @app_commands.describe(
+        acronimo="Acrónimo del departamento (ej: MPD, MDFR, FHP)",
+        url="URL del webhook de Discord donde se enviarán las postulaciones con @everyone (o 'eliminar')"
+    )
+    async def webhook_departamento(self, interaction: discord.Interaction, acronimo: str, url: str):
+        await interaction.response.defer(ephemeral=True)
+        if not await check_admin_permission(interaction):
+            await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados pueden configurar webhooks."), ephemeral=True)
+            return
+
+        gid = str(interaction.guild_id)
+        cleaned_acronym = acronimo.strip().upper()
+        dept = await aexecute(
+            "SELECT * FROM departments WHERE guild_id=$1 AND acronym ILIKE $2",
+            (gid, cleaned_acronym), fetch="one"
+        )
+        if not dept:
+            await interaction.followup.send(embed=error_embed("No encontrado", f"No existe ningún departamento con acrónimo **{cleaned_acronym}**."), ephemeral=True)
+            return
+
+        from bot.services.webhooks import set_webhook_url, remove_webhook_url, send_discord_webhook
+        clean_url = url.strip()
+
+        if clean_url.lower() in ("eliminar", "borrar", "quitar", "disable", "none", "ninguno"):
+            await remove_webhook_url(gid, "department", cleaned_acronym)
+            await interaction.followup.send(
+                embed=success_embed("Webhook Eliminado", f"Se ha eliminado el webhook para las postulaciones de **{dept['name']} [{cleaned_acronym}]**."),
+                ephemeral=True
+            )
+            return
+
+        ok, msg = await set_webhook_url(gid, "department", clean_url, target_id=cleaned_acronym)
+        if ok:
+            # Enviar mensaje de prueba al canal del webhook notificando la vinculación
+            test_embed = info_embed(
+                f"🏛️ Canal Oficial Vinculado — {dept['name']} [{cleaned_acronym}]",
+                f"Este canal ha sido vinculado mediante webhook para recibir las **solicitudes y formularios de ingreso** de los postulantes de **{dept['name']}**.\n\n"
+                f"Cada nueva postulación completada por un usuario en sus DMs llegará aquí notificando a **@everyone** para que los líderes de la agencia evalúen al postulante y pueda ser aceptado.\n\n"
+                f"**Configurado por:** {interaction.user.mention}\n"
+                f"**Servidor:** {interaction.guild.name}"
+            )
+            await send_discord_webhook(
+                webhook_url=clean_url,
+                content="@everyone 🔔 **Canal de Ingreso Vinculado Exitosamente**",
+                embeds=[test_embed],
+                username=f"Admisiones • {cleaned_acronym} {dept['name'][:25]}"
+            )
+            await interaction.followup.send(
+                embed=success_embed(
+                    "Webhook Configurado ✅",
+                    f"El webhook para **{dept['name']} [{cleaned_acronym}]** ha sido guardado exitosamente.\n"
+                    f"Se ha enviado un mensaje de verificación con mención a @everyone en el canal destino."
+                ),
+                ephemeral=True
+            )
+        else:
+            await interaction.followup.send(embed=error_embed("Error en Webhook", msg), ephemeral=True)
+
+    @departamento.command(name="webhooks_ver", description="Ver los webhooks configurados para postulaciones de departamentos")
+    async def webhooks_ver(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        if not await check_admin_permission(interaction):
+            await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados pueden consultar los webhooks."), ephemeral=True)
+            return
+
+        from bot.services.webhooks import get_webhook_url
+        gid = str(interaction.guild_id)
+        depts = await aexecute(
+            "SELECT * FROM departments WHERE guild_id=$1 ORDER BY name",
+            (gid,), fetch="all"
+        ) or []
+
+        e = info_embed("📡 Webhooks de Postulación a Departamentos")
+        if not depts:
+            e.description = "No hay departamentos registrados en este servidor."
+        else:
+            e.description = "Canales y webhooks donde se reciben los formularios de ingreso con mención a `@everyone`:\n"
+            for d in depts:
+                acr = d.get("acronym", "").upper()
+                emoji = DEPT_EMOJI.get(acr, "🏢")
+                wh_url = await get_webhook_url(gid, "department", acr)
+                if wh_url:
+                    parts = wh_url.split("/")
+                    masked = f"✅ `.../{parts[-2]}/{parts[-1][:6]}***`" if len(parts) >= 2 else "✅ Configurado"
+                else:
+                    masked = "❌ *Sin webhook específico (usa canal del servidor)*"
+                e.add_field(name=f"{emoji} {d['name']} [{acr}]", value=masked, inline=False)
+
+        e.set_footer(text="Configura un webhook con: /departamento webhook [acronimo] [url]")
+        await interaction.followup.send(embed=e, ephemeral=True)
 
 
 async def setup(bot):

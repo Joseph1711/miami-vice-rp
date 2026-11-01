@@ -930,6 +930,20 @@ CREATE TABLE IF NOT EXISTS server_vote_removals (
 );
 
 -- =====================
+-- SERVER WEBHOOKS (FINES, ARRESTS, DEPARTMENTS)
+-- =====================
+CREATE TABLE IF NOT EXISTS server_webhooks (
+    id TEXT PRIMARY KEY,
+    guild_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    target_id TEXT,
+    webhook_url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+
+-- =====================
 -- POLICE CRIMINAL RECORDS & CITATIONS
 -- =====================
 CREATE TABLE IF NOT EXISTS criminal_records (

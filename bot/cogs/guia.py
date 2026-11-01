@@ -289,6 +289,8 @@ SECCIONES = [
             ("/departamento despedir", "Da de baja a un miembro del departamento.",
              "Admin / Mando"),
             ("/departamento miembros", "Roster de oficiales y miembros del departamento.", "Todos"),
+            ("/departamento webhook", "Configura webhook para postulaciones (menciona @everyone).", "Admin / Mando"),
+            ("/departamento webhooks_ver", "Consulta los webhooks configurados para departamentos.", "Admin / Mando"),
             ("/flota ver", "Vehiculos de la flota del departamento.", "Miembros / Admin"),
             ("/flota catalogo", "Vehiculos disponibles para comprar con presupuesto departamental.",
              "Miembros / Admin"),
@@ -382,6 +384,9 @@ SECCIONES = [
         "comandos": [
             ("/policia configurar_roles", "Define que roles de Discord pueden usar los comandos "
                                           "policiales.", "Admin"),
+            ("/policia webhook_multas", "Configura webhook para registro automatico de multas.", "Admin"),
+            ("/policia webhook_arrestos", "Configura webhook para registro automatico de arrestos.", "Admin"),
+            ("/policia webhooks_ver", "Consulta los webhooks policiales activos.", "Admin"),
             ("/policia arrestar", "Arresto y procesamiento judicial de un infractor. Genera "
                                   "antecedentes y puede abrir la opcion de fianza.", "Policia"),
             ("/policia multar", "Emite y cobra una multa de transito o infraccion.", "Policia"),
