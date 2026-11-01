@@ -59,6 +59,12 @@ def _post_webhook_sync(url: str, payload: dict) -> Tuple[bool, Optional[str]]:
         except Exception:
             pass
         logger.error(f"[Webhook] Error HTTP {he.code}: {body}")
+        # Si el webhook no es propiedad de la app, Discord rechaza components con 400 (COMPONENT_NOT_OWNED)
+        if he.code == 400 and "components" in payload and ("COMPONENT_NOT_OWNED" in body or "components" in body):
+            logger.warning("[Webhook] Webhook manual no soporta componentes directamente. Reenviando payload sin components...")
+            retry_payload = dict(payload)
+            retry_payload.pop("components", None)
+            return _post_webhook_sync(url, retry_payload)
         return False, f"HTTP {he.code}: {body[:150]}"
     except Exception as e:
         logger.error(f"[Webhook] Error de conexión: {e}")
@@ -69,12 +75,13 @@ async def send_discord_webhook(
     webhook_url: str,
     content: Optional[str] = None,
     embeds: Optional[List[Any]] = None,
+    components: Optional[List[Dict[str, Any]]] = None,
     username: str = "Miami Vice RP • Registro Oficial",
     avatar_url: Optional[str] = None
 ) -> Tuple[bool, Optional[str]]:
     """
     Envía de forma asíncrona un mensaje o lista de embeds a una URL de webhook de Discord.
-    Soporta tanto discord.Embed como diccionarios.
+    Soporta tanto discord.Embed como diccionarios, y componentes interactivos (ActionRows/botones).
     """
     if not webhook_url or not validate_discord_webhook_url(webhook_url):
         return False, "URL de webhook inválida"
@@ -92,6 +99,8 @@ async def send_discord_webhook(
         payload["content"] = str(content)
     if serialized_embeds:
         payload["embeds"] = serialized_embeds
+    if components:
+        payload["components"] = components
     if username:
         payload["username"] = str(username)[:80]
     if avatar_url:
@@ -110,6 +119,18 @@ async def send_discord_webhook(
                 if resp.status in (200, 204):
                     return True, None
                 body = await resp.text()
+                # Reintento sin components si Discord rechaza por ser webhook manual
+                if resp.status == 400 and "components" in payload and ("COMPONENT_NOT_OWNED" in body or "components" in body):
+                    retry_payload = dict(payload)
+                    retry_payload.pop("components", None)
+                    async with session.post(
+                        webhook_url.strip(),
+                        json=retry_payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=10)
+                    ) as retry_resp:
+                        if retry_resp.status in (200, 204):
+                            return True, None
                 return False, f"HTTP {resp.status}: {body[:150]}"
     except ImportError:
         pass
@@ -322,11 +343,16 @@ async def send_arrest_webhook(guild_id: str, arrest_embed_dict: dict) -> bool:
 async def send_department_application_webhook(
     guild_id: str,
     dept: dict,
-    app_embed_dict: dict
+    app_embed_dict: dict,
+    app_id: str = "",
+    applicant_id: str = ""
 ) -> bool:
     """
     Envía una postulación de ingreso de departamento al webhook específico configurado,
-    MENCIONANDO EXPLÍCITAMENTE A @everyone para que los líderes/agencia evalúen y acepten al usuario.
+    MENCIONANDO EXPLÍCITAMENTE A @everyone y añadiendo los botones de acción:
+    - ✅ Aceptar
+    - 🔍 En Revisión
+    - ❌ Rechazar
     """
     acronym = dept.get("acronym", "").upper().strip()
     url = await get_webhook_url(guild_id, "department", acronym)
@@ -340,10 +366,43 @@ async def send_department_application_webhook(
     dept_name = dept.get("name", "Departamento Oficial")
     mention_content = f"@everyone 🚨 **¡Nueva Postulación de Ingreso para {dept_name} [{acronym}]!**"
 
+    dept_id = str(dept.get("id", ""))
+    components = []
+    if app_id and dept_id:
+        components = [
+            {
+                "type": 1,  # ActionRow
+                "components": [
+                    {
+                        "type": 2,  # Button
+                        "style": 3,  # Success / Verde
+                        "label": "Aceptar",
+                        "emoji": {"name": "✅"},
+                        "custom_id": f"btn_dept_act:accept:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+                    },
+                    {
+                        "type": 2,  # Button
+                        "style": 1,  # Primary / Azul
+                        "label": "En Revisión",
+                        "emoji": {"name": "🔍"},
+                        "custom_id": f"btn_dept_act:review:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+                    },
+                    {
+                        "type": 2,  # Button
+                        "style": 4,  # Danger / Rojo
+                        "label": "Rechazar",
+                        "emoji": {"name": "❌"},
+                        "custom_id": f"btn_dept_act:reject:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+                    }
+                ]
+            }
+        ]
+
     ok, err = await send_discord_webhook(
         webhook_url=url,
         content=mention_content,
         embeds=[app_embed_dict],
+        components=components if components else None,
         username=f"Admisiones • {acronym} {dept_name[:30]}",
         avatar_url="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?w=300&auto=format&fit=crop&q=80"
     )

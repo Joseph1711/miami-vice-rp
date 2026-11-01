@@ -4,6 +4,7 @@ from discord.ext import commands
 import datetime
 import random
 import string
+from typing import Optional, List, Dict, Any
 
 from bot.db import aexecute
 from bot.helpers import async_get_or_create_user, format_currency, generate_id, check_admin_permission
@@ -267,7 +268,14 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
         super().__init__(title="Aprobar Postulación a Departamento")
         self.app_id = app_id
         self.dept_id = dept_id
+class ApproveDepartmentAppModal(discord.ui.Modal):
+    def __init__(self, app_id: str, dept_id: str, applicant_id: str, guild_id: str = "", message_to_edit: Optional[discord.Message] = None):
+        super().__init__(title="Aceptar Postulación Oficial")
+        self.app_id = app_id
+        self.dept_id = dept_id
         self.applicant_id = applicant_id
+        self.guild_id = guild_id
+        self.message_to_edit = message_to_edit
 
         self.rank_input = discord.ui.TextInput(
             label="Rango Inicial Asignado",
@@ -285,7 +293,7 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
         )
         self.notes_input = discord.ui.TextInput(
             label="Mensaje o Instrucciones de Bienvenida",
-            placeholder="Instrucciones para presentarse a la academia...",
+            placeholder="Instrucciones para presentarse a la sede...",
             style=discord.TextStyle.paragraph,
             required=False,
             max_length=300
@@ -296,8 +304,18 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
         self.add_item(self.notes_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        if not await check_admin_permission(interaction):
+        await interaction.response.defer(ephemeral=True)
+        is_admin = await check_admin_permission(interaction)
+        is_mando = False
+        if not is_admin and interaction.guild:
+            mando_row = await aexecute(
+                "SELECT id FROM department_members WHERE department_id=$1 AND discord_id=$2",
+                (self.dept_id, str(interaction.user.id)), fetch="one"
+            )
+            if mando_row:
+                is_mando = True
+
+        if not (is_admin or is_mando):
             await interaction.followup.send(embed=error_embed("Sin permisos", "No tienes autorización para aprobar postulaciones"), ephemeral=True)
             return
 
@@ -313,12 +331,15 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
             await interaction.followup.send(embed=error_embed("Error", "Departamento no encontrado"), ephemeral=True)
             return
 
+        gid = self.guild_id or (str(interaction.guild_id) if interaction.guild else "")
+
         # Check existing member
         existing = await aexecute(
             "SELECT id FROM department_members WHERE department_id=$1 AND discord_id=$2",
             (self.dept_id, self.applicant_id), fetch="one"
         )
-        applicant_user = interaction.guild.get_member(int(self.applicant_id))
+        target_guild = interaction.client.get_guild(int(gid)) if gid and gid.isdigit() else interaction.guild
+        applicant_user = target_guild.get_member(int(self.applicant_id)) if target_guild else None
         user_name = applicant_user.name if applicant_user else "Usuario"
 
         if existing:
@@ -330,7 +351,7 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
             await aexecute(
                 """INSERT INTO department_members (id, department_id, discord_id, guild_id, rank, salary, joined_at, username)
                    VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7)""",
-                (generate_id(), self.dept_id, self.applicant_id, str(interaction.guild_id), rank, salary, user_name)
+                (generate_id(), self.dept_id, self.applicant_id, gid, rank, salary, user_name)
             )
 
         await aexecute(
@@ -338,8 +359,8 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
             (str(interaction.user.id), self.app_id)
         )
 
-        if applicant_user and dept.get("role_id"):
-            role = interaction.guild.get_role(int(dept["role_id"]))
+        if applicant_user and dept.get("role_id") and target_guild:
+            role = target_guild.get_role(int(dept["role_id"]))
             if role:
                 try:
                     await applicant_user.add_roles(role, reason=f"Postulación aceptada en {dept['name']}")
@@ -349,41 +370,71 @@ class ApproveDepartmentAppModal(discord.ui.Modal):
         await aexecute(
             """INSERT INTO department_audit (id, department_id, guild_id, action, performed_by, target_id, details, created_at)
                VALUES ($1,$2,$3,'application_approved',$4,$5,$6,NOW())""",
-            (generate_id(), self.dept_id, str(interaction.guild_id), str(interaction.user.id), self.applicant_id, f"Aprobado con Rango: {rank}, Salario: ${salary}")
+            (generate_id(), self.dept_id, gid, str(interaction.user.id), self.applicant_id, f"Aprobado con Rango: {rank}, Salario: ${salary}")
         )
 
-        emoji = DEPT_EMOJI.get(dept.get("acronym", ""), "🏢")
+        emoji = DEPT_EMOJI.get(dept.get("acronym", ""), "🏛️")
+
+        # Actualizar el mensaje con la postulación (si existe)
+        target_msg = self.message_to_edit or interaction.message
+        if target_msg:
+            try:
+                base_emb = target_msg.embeds[0] if target_msg.embeds else None
+                if base_emb:
+                    up_emb = discord.Embed.from_dict(base_emb.to_dict())
+                    up_emb.colour = discord.Colour(0x2ECC71)
+                    up_emb.add_field(
+                        name="✅ Postulación Aceptada",
+                        value=f"**Aprobado por:** {interaction.user.mention}\n**Rango:** `{rank}`\n**Salario:** {format_currency(salary)}\n**Fecha:** <t:{int(datetime.datetime.utcnow().timestamp())}:R>",
+                        inline=False
+                    )
+                    # Deshabilitar botones de acción
+                    dis_view = discord.ui.View(timeout=None)
+                    dis_view.add_item(discord.ui.Button(label="Aceptada", style=discord.ButtonStyle.success, emoji="✅", disabled=True))
+                    await target_msg.edit(embed=up_emb, view=dis_view)
+            except Exception as e_edit:
+                logger.warning(f"[Departments] No se pudo editar el mensaje del webhook: {e_edit}")
+
         res_emb = success_embed(
             f"✅ Postulación Aprobada — {emoji} {dept['name']}",
             f"**Postulante:** <@{self.applicant_id}>\n"
             f"**Rango asignado:** `{rank}`\n"
             f"**Salario diario:** {format_currency(salary)}\n"
             f"**Revisado por:** {interaction.user.mention}\n"
-            f"**Instrucciones:** {self.notes_input.value.strip() or 'Bienvenido al departamento.'}"
+            f"**Instrucciones:** {self.notes_input.value.strip() or 'Bienvenido a la institución.'}"
         )
-        await interaction.followup.send(embed=res_emb)
+        await interaction.followup.send(embed=res_emb, ephemeral=True)
 
         # Notify user via DM
-        if applicant_user:
+        applicant_obj = applicant_user or interaction.client.get_user(int(self.applicant_id))
+        if not applicant_obj:
+            try:
+                applicant_obj = await interaction.client.fetch_user(int(self.applicant_id))
+            except Exception:
+                pass
+
+        if applicant_obj:
             try:
                 dm_emb = success_embed(
                     f"🎉 ¡Felicidades! Fuiste aceptado en {dept['name']} [{dept.get('acronym', '')}]",
-                    f"Tu solicitud de ingreso fue **Aprobada** por la administración.\n\n"
+                    f"Tu solicitud de ingreso fue **Aprobada** por {interaction.user.mention}.\n\n"
                     f"🏷️ **Rango:** `{rank}`\n"
                     f"💵 **Salario diario:** {format_currency(salary)}\n"
-                    f"💬 **Mensaje:** {self.notes_input.value.strip() or 'Preséntate en la sede correspondiente.'}"
+                    f"💬 **Mensaje:** {self.notes_input.value.strip() or 'Preséntate en la sede correspondiente para comenzar tus labores.'}"
                 )
-                await applicant_user.send(embed=dm_emb)
+                await applicant_obj.send(embed=dm_emb)
             except Exception:
                 pass
 
 
 class RejectDepartmentAppModal(discord.ui.Modal):
-    def __init__(self, app_id: str, dept_name: str, applicant_id: str):
+    def __init__(self, app_id: str, dept_name: str, applicant_id: str, guild_id: str = "", message_to_edit: Optional[discord.Message] = None):
         super().__init__(title="Rechazar Postulación")
         self.app_id = app_id
         self.dept_name = dept_name
         self.applicant_id = applicant_id
+        self.guild_id = guild_id
+        self.message_to_edit = message_to_edit
 
         self.reason_input = discord.ui.TextInput(
             label="Motivo del Rechazo",
@@ -395,8 +446,19 @@ class RejectDepartmentAppModal(discord.ui.Modal):
         self.add_item(self.reason_input)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        if not await check_admin_permission(interaction):
+        await interaction.response.defer(ephemeral=True)
+        is_admin = await check_admin_permission(interaction)
+        is_mando = False
+        if not is_admin and interaction.guild:
+            # Buscar si es mando
+            mando_row = await aexecute(
+                "SELECT dm.id FROM department_members dm JOIN departments d ON d.id=dm.department_id WHERE d.name ILIKE $1 AND dm.discord_id=$2",
+                (self.dept_name, str(interaction.user.id)), fetch="one"
+            )
+            if mando_row:
+                is_mando = True
+
+        if not (is_admin or is_mando):
             await interaction.followup.send(embed=error_embed("Sin permisos", "No tienes autorización para rechazar postulaciones"), ephemeral=True)
             return
 
@@ -406,51 +468,84 @@ class RejectDepartmentAppModal(discord.ui.Modal):
             (str(interaction.user.id), self.app_id)
         )
 
+        # Actualizar el mensaje con la postulación (si existe)
+        target_msg = self.message_to_edit or interaction.message
+        if target_msg:
+            try:
+                base_emb = target_msg.embeds[0] if target_msg.embeds else None
+                if base_emb:
+                    up_emb = discord.Embed.from_dict(base_emb.to_dict())
+                    up_emb.colour = discord.Colour(0xE74C3C)
+                    up_emb.add_field(
+                        name="❌ Postulación Rechazada",
+                        value=f"**Revisado por:** {interaction.user.mention}\n**Motivo:** {reason}\n**Fecha:** <t:{int(datetime.datetime.utcnow().timestamp())}:R>",
+                        inline=False
+                    )
+                    dis_view = discord.ui.View(timeout=None)
+                    dis_view.add_item(discord.ui.Button(label="Rechazada", style=discord.ButtonStyle.danger, emoji="❌", disabled=True))
+                    await target_msg.edit(embed=up_emb, view=dis_view)
+            except Exception as e_edit:
+                logger.warning(f"[Departments] No se pudo editar el mensaje del webhook al rechazar: {e_edit}")
+
         res_emb = error_embed(
             f"❌ Postulación Rechazada — {self.dept_name}",
             f"**Postulante:** <@{self.applicant_id}>\n"
             f"**Revisado por:** {interaction.user.mention}\n"
             f"**Motivo:** {reason}"
         )
-        await interaction.followup.send(embed=res_emb)
+        await interaction.followup.send(embed=res_emb, ephemeral=True)
 
-        applicant_user = interaction.guild.get_member(int(self.applicant_id))
-        if applicant_user:
+        applicant_obj = interaction.guild.get_member(int(self.applicant_id)) if interaction.guild else None
+        if not applicant_obj:
+            try:
+                applicant_obj = await interaction.client.fetch_user(int(self.applicant_id))
+            except Exception:
+                pass
+
+        if applicant_obj:
             try:
                 dm_emb = error_embed(
                     f"❌ Postulación a {self.dept_name}",
-                    f"Lamentamos informarte que tu postulación fue rechazada.\n\n"
+                    f"Lamentamos informarte que tu postulación fue **Rechazada** por los mandos de la agencia.\n\n"
                     f"**Motivo oficial:** {reason}\n\n"
-                    f"Puedes volver a postularte cuando cumplas los requisitos."
+                    f"Puedes volver a postularte cuando cumplas con los requisitos solicitados."
                 )
-                await applicant_user.send(embed=dm_emb)
+                await applicant_obj.send(embed=dm_emb)
             except Exception:
                 pass
 
 
 class DepartmentApplicationReviewView(discord.ui.View):
-    def __init__(self, app_id: str, dept_id: str, applicant_id: str, dept_name: str):
+    """Vista con botones de acción para canales de revisión y webhooks."""
+    def __init__(self, app_id: str, dept_id: str, applicant_id: str, dept_name: str, guild_id: str = ""):
         super().__init__(timeout=None)
         self.app_id = app_id
         self.dept_id = dept_id
         self.applicant_id = applicant_id
         self.dept_name = dept_name
+        self.guild_id = guild_id
 
-    @discord.ui.button(label="Aprobar Solicitud", style=discord.ButtonStyle.success, emoji="✅", custom_id="btn_app_approve")
-    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await check_admin_permission(interaction):
-            await interaction.response.send_message(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
-            return
-        modal = ApproveDepartmentAppModal(self.app_id, self.dept_id, self.applicant_id)
-        await interaction.response.send_modal(modal)
-
-    @discord.ui.button(label="Rechazar Solicitud", style=discord.ButtonStyle.danger, emoji="❌", custom_id="btn_app_reject")
-    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if not await check_admin_permission(interaction):
-            await interaction.response.send_message(embed=error_embed("Sin permisos", "Solo administradores autorizados"), ephemeral=True)
-            return
-        modal = RejectDepartmentAppModal(self.app_id, self.dept_name, self.applicant_id)
-        await interaction.response.send_modal(modal)
+        # 1. Botón Aceptar (Verde)
+        self.add_item(discord.ui.Button(
+            label="Aceptar",
+            style=discord.ButtonStyle.success,
+            emoji="✅",
+            custom_id=f"btn_dept_act:accept:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+        ))
+        # 2. Botón En Revisión (Azul)
+        self.add_item(discord.ui.Button(
+            label="En Revisión",
+            style=discord.ButtonStyle.primary,
+            emoji="🔍",
+            custom_id=f"btn_dept_act:review:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+        ))
+        # 3. Botón Rechazar (Rojo)
+        self.add_item(discord.ui.Button(
+            label="Rechazar",
+            style=discord.ButtonStyle.danger,
+            emoji="❌",
+            custom_id=f"btn_dept_act:reject:{app_id}:{dept_id}:{applicant_id}:{guild_id}"
+        ))
 
 
 class DepartmentDMApplicationView(discord.ui.View):
@@ -564,14 +659,16 @@ class DepartmentApplicationModal(discord.ui.Modal):
         rev_emb.add_field(name="🚨 Caso Práctico / Actuación", value=self.scenario.value[:600], inline=False)
         rev_emb.set_footer(text=f"Fecha: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')} • ID: {app_id}")
 
-        # 1. ENVIAR AL WEBHOOK ESPECÍFICO DEL DEPARTAMENTO (CON MENCIÓN OBLIGATORIA A @everyone)
+        # 1. ENVIAR AL WEBHOOK ESPECÍFICO DEL DEPARTAMENTO (CON MENCIÓN OBLIGATORIA A @everyone Y BOTONES)
         from bot.services.webhooks import send_department_application_webhook
         wh_enviado = False
         try:
             wh_enviado = await send_department_application_webhook(
                 guild_id=gid,
                 dept=self.dept,
-                app_embed_dict=rev_emb.to_dict()
+                app_embed_dict=rev_emb.to_dict(),
+                app_id=app_id,
+                applicant_id=uid
             )
         except Exception as wh_err:
             logger.warning(f"[Departments] Error enviando webhook de postulación de {acronym}: {wh_err}")
@@ -593,7 +690,7 @@ class DepartmentApplicationModal(discord.ui.Modal):
             if app_channel_id:
                 channel = guild.get_channel(int(app_channel_id))
                 if channel:
-                    view = DepartmentApplicationReviewView(app_id, self.dept["id"], uid, self.dept["name"])
+                    view = DepartmentApplicationReviewView(app_id, self.dept["id"], uid, self.dept["name"], gid)
                     try:
                         await channel.send(embed=rev_emb, view=view)
                     except Exception:
@@ -1184,28 +1281,148 @@ class Departments(commands.Cog):
     # =========================================================================
     @commands.Cog.listener()
     async def on_interaction(self, interaction: discord.Interaction):
-        """Maneja clics persistentes de botones de postulación recibidos en DM."""
-        if interaction.type == discord.InteractionType.component:
-            cid = interaction.data.get("custom_id", "")
-            if cid.startswith("btn_dept_app:"):
-                parts = cid.split(":")
-                if len(parts) >= 3:
-                    dept_id = parts[1]
-                    gid = parts[2]
-                    dept = await aexecute("SELECT * FROM departments WHERE id=$1", (dept_id,), fetch="one")
-                    if dept:
-                        modal = DepartmentApplicationModal(dept, gid)
-                        await interaction.response.send_modal(modal)
+        """Maneja clics persistentes de botones de postulación en DM y botones de acción en canales/webhooks."""
+        if interaction.type != discord.InteractionType.component:
+            return
+
+        cid = interaction.data.get("custom_id", "")
+
+        # 1. Botón para abrir el formulario oficial en DM
+        if cid.startswith("btn_dept_app:"):
+            parts = cid.split(":")
+            if len(parts) >= 3:
+                dept_id = parts[1]
+                gid = parts[2]
+                dept = await aexecute("SELECT * FROM departments WHERE id=$1", (dept_id,), fetch="one")
+                if dept:
+                    modal = DepartmentApplicationModal(dept, gid)
+                    await interaction.response.send_modal(modal)
+            return
+
+        # 2. Botones de gestión en el canal del webhook (Aceptar, En Revisión, Rechazar)
+        if cid.startswith("btn_dept_act:"):
+            parts = cid.split(":")
+            if len(parts) >= 5:
+                action = parts[1]
+                app_id = parts[2]
+                dept_id = parts[3]
+                applicant_id = parts[4]
+                gid = parts[5] if len(parts) > 5 else str(interaction.guild_id or "")
+
+                # Verificar permisos de Administrador o Mando de la agencia
+                is_admin = await check_admin_permission(interaction)
+                is_mando = False
+                if not is_admin and interaction.guild:
+                    mando_row = await aexecute(
+                        "SELECT id FROM department_members WHERE department_id=$1 AND discord_id=$2",
+                        (dept_id, str(interaction.user.id)), fetch="one"
+                    )
+                    if mando_row:
+                        is_mando = True
+
+                if not (is_admin or is_mando):
+                    await interaction.response.send_message(
+                        embed=error_embed("Sin permisos", "Solo administradores o mandos de la agencia pueden gestionar esta postulación."),
+                        ephemeral=True
+                    )
+                    return
+
+                app = await aexecute("SELECT * FROM applications WHERE id=$1", (app_id,), fetch="one")
+                dept = await aexecute("SELECT * FROM departments WHERE id=$1", (dept_id,), fetch="one")
+                dept_name = dept["name"] if dept else "Departamento Oficial"
+
+                # ACCIÓN: EN REVISIÓN
+                if action == "review":
+                    if app and app.get("status") in ("approved", "accepted", "denied", "rejected"):
+                        await interaction.response.send_message(
+                            embed=error_embed("Postulación Finalizada", f"Esta postulación ya fue procesada anteriormente con estado **{app['status']}**."),
+                            ephemeral=True
+                        )
+                        return
+
+                    await aexecute(
+                        "UPDATE applications SET status='in_review', reviewed_by=$1, updated_at=NOW() WHERE id=$2",
+                        (str(interaction.user.id), app_id)
+                    )
+
+                    # Modificar mensaje del webhook/canal
+                    orig_emb = interaction.message.embeds[0] if interaction.message and interaction.message.embeds else None
+                    up_emb = None
+                    if orig_emb:
+                        up_emb = discord.Embed.from_dict(orig_emb.to_dict())
+                        up_emb.colour = discord.Colour(0xF1C40F)
+                        up_emb.add_field(
+                            name="🔍 Estado de Revisión",
+                            value=f"**EN REVISIÓN** por {interaction.user.mention}\n**Fecha:** <t:{int(datetime.datetime.utcnow().timestamp())}:R>",
+                            inline=False
+                        )
+
+                    # Vista con botón 'En Revisión' desactivado
+                    up_view = discord.ui.View(timeout=None)
+                    up_view.add_item(discord.ui.Button(label="Aceptar", style=discord.ButtonStyle.success, emoji="✅", custom_id=f"btn_dept_act:accept:{app_id}:{dept_id}:{applicant_id}:{gid}"))
+                    up_view.add_item(discord.ui.Button(label="En Revisión", style=discord.ButtonStyle.primary, emoji="🔍", custom_id=f"btn_dept_act:review:{app_id}:{dept_id}:{applicant_id}:{gid}", disabled=True))
+                    up_view.add_item(discord.ui.Button(label="Rechazar", style=discord.ButtonStyle.danger, emoji="❌", custom_id=f"btn_dept_act:reject:{app_id}:{dept_id}:{applicant_id}:{gid}"))
+
+                    if up_emb:
+                        await interaction.response.edit_message(embed=up_emb, view=up_view)
+                    else:
+                        await interaction.response.edit_message(view=up_view)
+
+                    # Notificar por privado al aspirante
+                    applicant_obj = interaction.client.get_user(int(applicant_id))
+                    if not applicant_obj:
+                        try:
+                            applicant_obj = await interaction.client.fetch_user(int(applicant_id))
+                        except Exception:
+                            pass
+                    if applicant_obj:
+                        try:
+                            await applicant_obj.send(embed=info_embed(
+                                f"🔍 Postulación en Revisión — {dept_name}",
+                                f"Hola {applicant_obj.mention}, tu solicitud para ingresar a **{dept_name}** ha pasado a estado de **EN REVISIÓN** por los mandos ({interaction.user.mention}).\n\n"
+                                f"Tu expediente está siendo evaluado en este momento. Recibirás otra notificación cuando se tome la decisión final."
+                            ))
+                        except Exception:
+                            pass
+
+                # ACCIÓN: ACEPTAR
+                elif action == "accept":
+                    if app and app.get("status") in ("approved", "accepted"):
+                        await interaction.response.send_message(
+                            embed=error_embed("Ya Aceptada", "Esta postulación ya ha sido aceptada previamente."),
+                            ephemeral=True
+                        )
+                        return
+                    modal = ApproveDepartmentAppModal(app_id, dept_id, applicant_id, gid, message_to_edit=interaction.message)
+                    await interaction.response.send_modal(modal)
+
+                # ACCIÓN: RECHAZAR
+                elif action == "reject":
+                    if app and app.get("status") in ("denied", "rejected"):
+                        await interaction.response.send_message(
+                            embed=error_embed("Ya Rechazada", "Esta postulación ya ha sido rechazada previamente."),
+                            ephemeral=True
+                        )
+                        return
+                    modal = RejectDepartmentAppModal(app_id, dept_name, applicant_id, gid, message_to_edit=interaction.message)
+                    await interaction.response.send_modal(modal)
 
     # =========================================================================
     # COMANDOS DE CONFIGURACIÓN DE WEBHOOKS DE DEPARTAMENTOS
     # =========================================================================
-    @departamento.command(name="webhook", description="Configurar webhook para recibir postulaciones de este departamento con @everyone")
+    @departamento.command(name="webhook", description="Configurar webhook para recibir postulaciones de este departamento con @everyone y botones")
     @app_commands.describe(
         acronimo="Acrónimo del departamento (ej: MPD, MDFR, FHP)",
-        url="URL del webhook de Discord donde se enviarán las postulaciones con @everyone (o 'eliminar')"
+        url="URL del webhook de Discord donde se enviarán las postulaciones (o 'eliminar')",
+        canal="Canal del servidor donde crear automáticamente el webhook oficial (opcional)"
     )
-    async def webhook_departamento(self, interaction: discord.Interaction, acronimo: str, url: str):
+    async def webhook_departamento(
+        self,
+        interaction: discord.Interaction,
+        acronimo: str,
+        url: Optional[str] = None,
+        canal: Optional[discord.TextChannel] = None
+    ):
         await interaction.response.defer(ephemeral=True)
         if not await check_admin_permission(interaction):
             await interaction.followup.send(embed=error_embed("Sin permisos", "Solo administradores autorizados pueden configurar webhooks."), ephemeral=True)
@@ -1222,14 +1439,29 @@ class Departments(commands.Cog):
             return
 
         from bot.services.webhooks import set_webhook_url, remove_webhook_url, send_discord_webhook
-        clean_url = url.strip()
 
-        if clean_url.lower() in ("eliminar", "borrar", "quitar", "disable", "none", "ninguno"):
+        # Si se solicita eliminar
+        if url and url.strip().lower() in ("eliminar", "borrar", "quitar", "disable", "none", "ninguno"):
             await remove_webhook_url(gid, "department", cleaned_acronym)
             await interaction.followup.send(
                 embed=success_embed("Webhook Eliminado", f"Se ha eliminado el webhook para las postulaciones de **{dept['name']} [{cleaned_acronym}]**."),
                 ephemeral=True
             )
+            return
+
+        # Si se seleccionó un canal directamente, crear webhook de aplicación
+        clean_url = ""
+        if canal:
+            try:
+                created_wh = await canal.create_webhook(name=f"Admisiones {dept['name'][:25]}")
+                clean_url = created_wh.url
+            except Exception as e_wh:
+                await interaction.followup.send(embed=error_embed("Error Creando Webhook", f"No se pudo crear el webhook en {canal.mention}: {e_wh}"), ephemeral=True)
+                return
+        elif url:
+            clean_url = url.strip()
+        else:
+            await interaction.followup.send(embed=error_embed("Faltan Datos", "Debes ingresar una `url` de webhook o seleccionar un `canal` de texto."), ephemeral=True)
             return
 
         ok, msg = await set_webhook_url(gid, "department", clean_url, target_id=cleaned_acronym)
@@ -1238,7 +1470,10 @@ class Departments(commands.Cog):
             test_embed = info_embed(
                 f"🏛️ Canal Oficial Vinculado — {dept['name']} [{cleaned_acronym}]",
                 f"Este canal ha sido vinculado mediante webhook para recibir las **solicitudes y formularios de ingreso** de los postulantes de **{dept['name']}**.\n\n"
-                f"Cada nueva postulación completada por un usuario en sus DMs llegará aquí notificando a **@everyone** para que los líderes de la agencia evalúen al postulante y pueda ser aceptado.\n\n"
+                f"Cada nueva postulación completada por un usuario en sus DMs llegará aquí notificando a **@everyone** e incluirá **botones interactivos** para:\n"
+                f"• ✅ **Aceptar:** Contrata al postulante, asigna rango y notifica al usuario por privado.\n"
+                f"• 🔍 **En Revisión:** Marca el expediente en evaluación y avisa al postulante.\n"
+                f"• ❌ **Rechazar:** Abre un modal para indicar el motivo y notifica al postulante.\n\n"
                 f"**Configurado por:** {interaction.user.mention}\n"
                 f"**Servidor:** {interaction.guild.name}"
             )
